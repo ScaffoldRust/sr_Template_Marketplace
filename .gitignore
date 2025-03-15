@@ -3,6 +3,7 @@
 
 # Testing
 /coverage
+test_snapshots
 
 # Next.js
 /.next/
