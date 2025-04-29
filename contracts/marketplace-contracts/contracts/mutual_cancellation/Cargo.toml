@@ -1,0 +1,13 @@
+[package]
+name = "mutual-cancellation"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+soroban-sdk = { version = "~20.5" }
+
+[dev-dependencies]
+soroban-sdk = { version = "~20.5", features = ["testutils"] } 
