@@ -1,4 +1,4 @@
-use soroban_sdk::{contracttype, symbol_short, Address, Env, String, Symbol, Vec};
+use soroban_sdk::{Address, Env, String, Symbol, Vec, contracttype, symbol_short};
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -42,7 +42,11 @@ const ESCROW_COUNTER: Symbol = symbol_short!("ESC_CNT");
 
 // Escrow ID generation
 pub fn get_next_escrow_id(env: &Env) -> u64 {
-    let current = env.storage().instance().get(&ESCROW_COUNTER).unwrap_or(0u64);
+    let current = env
+        .storage()
+        .instance()
+        .get(&ESCROW_COUNTER)
+        .unwrap_or(0u64);
     let next = current + 1;
     env.storage().instance().set(&ESCROW_COUNTER, &next);
     next
@@ -62,7 +66,10 @@ pub fn set_escrow(env: &Env, escrow: &Escrow) {
 // User escrows storage functions
 pub fn get_user_escrows(env: &Env, user: &Address) -> Vec<u64> {
     let key = StorageKey::UserEscrows(user.clone());
-    env.storage().persistent().get(&key).unwrap_or(Vec::new(env))
+    env.storage()
+        .persistent()
+        .get(&key)
+        .unwrap_or(Vec::new(env))
 }
 
 pub fn add_user_escrow(env: &Env, user: &Address, escrow_id: u64) {

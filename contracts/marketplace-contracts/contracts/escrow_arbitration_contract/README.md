@@ -27,7 +27,7 @@ This smart contract provides a trustless escrow service where funds are held sec
 ```bash
 # Clone the repository
 git clone <repository-url>
-cd escrow-arbitration-contract
+cd escrow_arbitration_contract
 
 # Build the contract
 cargo build --target wasm32-unknown-unknown --release

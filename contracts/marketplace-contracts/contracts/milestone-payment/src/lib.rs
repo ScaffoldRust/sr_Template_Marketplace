@@ -1,19 +1,17 @@
 #![no_std]
 
+mod contract;
 mod error;
 mod events;
-mod storage;
 mod milestone_storage;
-mod contract;
+mod storage;
 mod test;
 
-use soroban_sdk::{
-    contract, contractimpl, Address, Env, Vec,
-};
+use soroban_sdk::{Address, Env, Vec, contract, contractimpl};
 
+pub use contract::*;
 pub use error::*;
 pub use events::*;
-pub use contract::*;
 
 #[contract]
 pub struct MilestonePaymentContract;
@@ -44,11 +42,7 @@ impl MilestonePaymentContract {
     }
 
     /// Fund the contract by locking tokens in escrow
-    pub fn fund_contract(
-        env: Env,
-        contract_id: u64,
-        buyer: Address,
-    ) -> Result<(), ContractError> {
+    pub fn fund_contract(env: Env, contract_id: u64, buyer: Address) -> Result<(), ContractError> {
         buyer.require_auth();
         contract::fund_contract(&env, contract_id, &buyer)
     }

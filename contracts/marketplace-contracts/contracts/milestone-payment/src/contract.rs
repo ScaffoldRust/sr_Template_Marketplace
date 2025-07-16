@@ -3,10 +3,13 @@ use crate::events::*;
 use crate::milestone_storage;
 use crate::milestone_storage::*;
 use crate::storage;
-use soroban_sdk::{token, Address, Env, String, Vec};
+use soroban_sdk::{Address, Env, String, Vec, token};
 
 // Validate milestone data
-fn validate_milestones(milestones: &Vec<MilestoneData>, total_amount: u128) -> Result<(), ContractError> {
+fn validate_milestones(
+    milestones: &Vec<MilestoneData>,
+    total_amount: u128,
+) -> Result<(), ContractError> {
     if milestones.is_empty() {
         return Err(ContractError::InvalidMilestoneData);
     }
@@ -16,7 +19,8 @@ fn validate_milestones(milestones: &Vec<MilestoneData>, total_amount: u128) -> R
         if milestone.amount == 0 {
             return Err(ContractError::InvalidAmount);
         }
-        sum = sum.checked_add(milestone.amount)
+        sum = sum
+            .checked_add(milestone.amount)
             .ok_or(ContractError::InvalidAmount)?;
     }
 
@@ -82,11 +86,11 @@ pub fn create_contract(
             dispute_reason: None,
             disputed_at: None,
         };
-        
+
         set_milestone(env, contract_id, &milestone);
         milestone_ids.push_back(i as u32);
     }
-    
+
     set_contract_milestone_ids(env, contract_id, &milestone_ids);
 
     emit_contract_created(
@@ -102,11 +106,7 @@ pub fn create_contract(
     Ok(contract_id)
 }
 
-pub fn fund_contract(
-    env: &Env,
-    contract_id: u64,
-    buyer: &Address,
-) -> Result<(), ContractError> {
+pub fn fund_contract(env: &Env, contract_id: u64, buyer: &Address) -> Result<(), ContractError> {
     let mut contract = get_contract(env, contract_id)?;
 
     if contract.buyer != *buyer {
@@ -120,7 +120,7 @@ pub fn fund_contract(
     // Transfer tokens from buyer to contract
     let contract_address = env.current_contract_address();
     let token_client = token::Client::new(env, &contract.token);
-    
+
     token_client.transfer(buyer, &contract_address, &(contract.total_amount as i128));
 
     contract.escrowed_amount = contract.total_amount;
@@ -191,15 +191,23 @@ pub fn approve_milestone(
     // Release funds to seller
     let contract_address = env.current_contract_address();
     let token_client = token::Client::new(env, &contract.token);
-    
-    token_client.transfer(&contract_address, &contract.seller, &(milestone.amount as i128));
+
+    token_client.transfer(
+        &contract_address,
+        &contract.seller,
+        &(milestone.amount as i128),
+    );
 
     milestone.status = MilestoneStatus::Approved;
     milestone.approved_at = Some(env.ledger().timestamp());
-    
-    contract.released_amount = contract.released_amount.checked_add(milestone.amount)
+
+    contract.released_amount = contract
+        .released_amount
+        .checked_add(milestone.amount)
         .ok_or(ContractError::InvalidAmount)?;
-    contract.escrowed_amount = contract.escrowed_amount.checked_sub(milestone.amount)
+    contract.escrowed_amount = contract
+        .escrowed_amount
+        .checked_sub(milestone.amount)
         .ok_or(ContractError::InvalidAmount)?;
 
     set_milestone(env, contract_id, &milestone);
@@ -207,7 +215,7 @@ pub fn approve_milestone(
     // Check if all milestones are completed
     let milestone_ids = get_contract_milestone_ids(env, contract_id);
     let mut all_approved = true;
-    
+
     for mid in milestone_ids.iter() {
         if let Ok(m) = get_milestone(env, contract_id, mid) {
             if m.status != MilestoneStatus::Approved {
@@ -220,7 +228,7 @@ pub fn approve_milestone(
     if all_approved {
         contract.status = ContractStatus::Completed;
         contract.completed_at = Some(env.ledger().timestamp());
-        
+
         emit_contract_completed(
             env,
             contract_id,
@@ -232,7 +240,13 @@ pub fn approve_milestone(
 
     set_contract(env, &contract);
 
-    emit_milestone_approved(env, contract_id, milestone_id, buyer.clone(), milestone.amount);
+    emit_milestone_approved(
+        env,
+        contract_id,
+        milestone_id,
+        buyer.clone(),
+        milestone.amount,
+    );
 
     Ok(())
 }
@@ -291,17 +305,25 @@ pub fn resolve_dispute(
         // Release funds to seller
         let contract_address = env.current_contract_address();
         let token_client = token::Client::new(env, &contract.token);
-        
-        token_client.transfer(&contract_address, &contract.seller, &(milestone.amount as i128));
+
+        token_client.transfer(
+            &contract_address,
+            &contract.seller,
+            &(milestone.amount as i128),
+        );
 
         milestone.status = MilestoneStatus::Approved;
         milestone.approved_at = Some(env.ledger().timestamp());
-        
-        contract.released_amount = contract.released_amount.checked_add(milestone.amount)
+
+        contract.released_amount = contract
+            .released_amount
+            .checked_add(milestone.amount)
             .ok_or(ContractError::InvalidAmount)?;
-        contract.escrowed_amount = contract.escrowed_amount.checked_sub(milestone.amount)
+        contract.escrowed_amount = contract
+            .escrowed_amount
+            .checked_sub(milestone.amount)
             .ok_or(ContractError::InvalidAmount)?;
-        
+
         amount_released = milestone.amount;
     } else {
         milestone.status = MilestoneStatus::Resolved;
@@ -313,7 +335,7 @@ pub fn resolve_dispute(
     if approve {
         let milestone_ids = get_contract_milestone_ids(env, contract_id);
         let mut all_approved = true;
-        
+
         for mid in milestone_ids.iter() {
             if let Ok(m) = get_milestone(env, contract_id, mid) {
                 if m.status != MilestoneStatus::Approved {
@@ -326,7 +348,7 @@ pub fn resolve_dispute(
         if all_approved {
             contract.status = ContractStatus::Completed;
             contract.completed_at = Some(env.ledger().timestamp());
-            
+
             emit_contract_completed(
                 env,
                 contract_id,
@@ -339,7 +361,14 @@ pub fn resolve_dispute(
 
     set_contract(env, &contract);
 
-    emit_dispute_resolved(env, contract_id, milestone_id, admin.clone(), approve, amount_released);
+    emit_dispute_resolved(
+        env,
+        contract_id,
+        milestone_id,
+        admin.clone(),
+        approve,
+        amount_released,
+    );
 
     Ok(())
 }
@@ -355,7 +384,8 @@ pub fn cancel_contract(
         return Err(ContractError::ParticipantOnly);
     }
 
-    if contract.status == ContractStatus::Completed || contract.status == ContractStatus::Cancelled {
+    if contract.status == ContractStatus::Completed || contract.status == ContractStatus::Cancelled
+    {
         return Err(ContractError::OperationNotAllowed);
     }
 
@@ -365,7 +395,7 @@ pub fn cancel_contract(
     if refund_amount > 0 {
         let contract_address = env.current_contract_address();
         let token_client = token::Client::new(env, &contract.token);
-        
+
         token_client.transfer(&contract_address, &contract.buyer, &(refund_amount as i128));
     }
 
@@ -421,11 +451,11 @@ pub fn get_user_contracts(
 ) -> Result<Vec<u64>, ContractError> {
     let all_contracts = milestone_storage::get_user_contracts(env, user);
     let mut result = Vec::new(env);
-    
+
     let start = offset as usize;
     let end = (offset + limit) as usize;
     let contracts_len = all_contracts.len() as usize;
-    
+
     for i in start..end.min(contracts_len) {
         if let Some(contract_id) = all_contracts.get(i as u32) {
             result.push_back(contract_id);

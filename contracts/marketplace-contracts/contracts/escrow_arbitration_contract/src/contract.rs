@@ -1,8 +1,8 @@
 use crate::error::ContractError;
-use crate::events::*;
 use crate::escrow_storage;
 use crate::escrow_storage::*;
-use soroban_sdk::{token, Address, Env, String, Vec};
+use crate::events::*;
+use soroban_sdk::{Address, Env, String, Vec, token};
 
 pub fn create_escrow(
     env: &Env,
@@ -59,11 +59,7 @@ pub fn create_escrow(
     Ok(escrow_id)
 }
 
-pub fn deposit(
-    env: &Env,
-    escrow_id: u64,
-    buyer: &Address,
-) -> Result<(), ContractError> {
+pub fn deposit(env: &Env, escrow_id: u64, buyer: &Address) -> Result<(), ContractError> {
     let mut escrow = get_escrow(env, escrow_id)?;
 
     if escrow.buyer != *buyer {
@@ -77,7 +73,7 @@ pub fn deposit(
     // Transfer tokens from buyer to contract
     let contract_address = env.current_contract_address();
     let token_client = token::Client::new(env, &escrow.token);
-    
+
     token_client.transfer(buyer, &contract_address, &(escrow.amount as i128));
 
     escrow.status = EscrowStatus::Funded;
@@ -90,11 +86,7 @@ pub fn deposit(
     Ok(())
 }
 
-pub fn release_funds(
-    env: &Env,
-    escrow_id: u64,
-    buyer: &Address,
-) -> Result<(), ContractError> {
+pub fn release_funds(env: &Env, escrow_id: u64, buyer: &Address) -> Result<(), ContractError> {
     let mut escrow = get_escrow(env, escrow_id)?;
 
     if escrow.buyer != *buyer {
@@ -108,7 +100,7 @@ pub fn release_funds(
     // Transfer tokens from contract to seller
     let contract_address = env.current_contract_address();
     let token_client = token::Client::new(env, &escrow.token);
-    
+
     token_client.transfer(&contract_address, &escrow.seller, &(escrow.amount as i128));
 
     escrow.status = EscrowStatus::Completed;
@@ -197,11 +189,7 @@ pub fn arbitrate(
     Ok(())
 }
 
-pub fn refund(
-    env: &Env,
-    escrow_id: u64,
-    requester: &Address,
-) -> Result<(), ContractError> {
+pub fn refund(env: &Env, escrow_id: u64, requester: &Address) -> Result<(), ContractError> {
     let mut escrow = get_escrow(env, escrow_id)?;
 
     // Only buyer or seller can request refund for non-disputed escrows
@@ -217,7 +205,7 @@ pub fn refund(
     // Transfer tokens back to buyer
     let contract_address = env.current_contract_address();
     let token_client = token::Client::new(env, &escrow.token);
-    
+
     token_client.transfer(&contract_address, &escrow.buyer, &(escrow.amount as i128));
 
     escrow.status = EscrowStatus::Cancelled;
@@ -245,11 +233,11 @@ pub fn get_user_escrows(
 ) -> Result<Vec<u64>, ContractError> {
     let all_escrows = escrow_storage::get_user_escrows(env, user);
     let mut result = Vec::new(env);
-    
+
     let start = offset as usize;
     let end = (offset + limit) as usize;
     let escrows_len = all_escrows.len() as usize;
-    
+
     for i in start..end.min(escrows_len) {
         if let Some(escrow_id) = all_escrows.get(i as u32) {
             result.push_back(escrow_id);

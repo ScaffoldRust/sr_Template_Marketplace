@@ -1,13 +1,10 @@
 #![cfg(test)]
 extern crate std;
 
-use crate::{EscrowArbitrationContract, EscrowArbitrationContractClient};
-use crate::escrow_storage::EscrowStatus;
 use crate::error::ContractError;
-use soroban_sdk::{
-    testutils::Address as _,
-    token, Address, Env, String,
-};
+use crate::escrow_storage::EscrowStatus;
+use crate::{EscrowArbitrationContract, EscrowArbitrationContractClient};
+use soroban_sdk::{Address, Env, String, testutils::Address as _, token};
 use token::Client as TokenClient;
 use token::StellarAssetClient as TokenAdminClient;
 
@@ -45,21 +42,21 @@ impl<'a> EscrowTest<'a> {
     fn setup() -> Self {
         let env = Env::default();
         env.mock_all_auths();
-        
+
         let admin = Address::generate(&env);
         let buyer = Address::generate(&env);
         let seller = Address::generate(&env);
         let arbitrator = Address::generate(&env);
         let token_admin = Address::generate(&env);
-        
+
         let (token, token_admin_client) = create_token_contract(&env, &token_admin);
         token_admin_client.mint(&buyer, &(ESCROW_AMOUNT as i128));
-        
+
         let contract = create_escrow_contract(&env);
         let _ = contract.initialize(&admin);
-        
+
         let description = String::from_str(&env, TEST_DESCRIPTION);
-        
+
         EscrowTest {
             env,
             admin,
@@ -71,7 +68,7 @@ impl<'a> EscrowTest<'a> {
             description,
         }
     }
-    
+
     fn create_escrow(&self) -> u64 {
         self.contract.create_escrow(
             &self.buyer,
@@ -82,11 +79,11 @@ impl<'a> EscrowTest<'a> {
             &self.description,
         )
     }
-    
+
     fn deposit_funds(&self, escrow_id: u64) {
         self.contract.deposit(&escrow_id, &self.buyer);
     }
-    
+
     fn setup_with_funded_escrow() -> (Self, u64) {
         let test = Self::setup();
         let escrow_id = test.create_escrow();
@@ -119,7 +116,7 @@ fn test_initialize_duplicate() {
 fn test_create_escrow_success() {
     let test = EscrowTest::setup();
     let escrow_id = test.create_escrow();
-    
+
     let escrow = test.contract.get_escrow(&escrow_id);
     assert_eq!(escrow.buyer, test.buyer);
     assert_eq!(escrow.seller, test.seller);
@@ -194,12 +191,12 @@ fn test_create_escrow_same_seller_arbitrator() {
 fn test_deposit_success() {
     let test = EscrowTest::setup();
     let escrow_id = test.create_escrow();
-    
+
     let buyer_balance_before = test.token.balance(&test.buyer);
     let contract_balance_before = test.token.balance(&test.contract.address);
-    
+
     test.deposit_funds(escrow_id);
-    
+
     assert_eq!(
         test.token.balance(&test.buyer),
         buyer_balance_before - ESCROW_AMOUNT as i128
@@ -208,7 +205,7 @@ fn test_deposit_success() {
         test.token.balance(&test.contract.address),
         contract_balance_before + ESCROW_AMOUNT as i128
     );
-    
+
     let escrow = test.contract.get_escrow(&escrow_id);
     assert_eq!(escrow.status, EscrowStatus::Funded);
     assert!(escrow.funded_at.is_some());
@@ -228,7 +225,7 @@ fn test_deposit_already_funded() {
     let test = EscrowTest::setup();
     let escrow_id = test.create_escrow();
     test.deposit_funds(escrow_id);
-    
+
     let result = test.contract.try_deposit(&escrow_id, &test.buyer);
     assert!(result.is_err());
     assert_eq!(result.unwrap_err(), Ok(ContractError::EscrowAlreadyFunded));
@@ -246,12 +243,12 @@ fn test_deposit_nonexistent_escrow() {
 #[test]
 fn test_release_funds_success() {
     let (test, escrow_id) = EscrowTest::setup_with_funded_escrow();
-    
+
     let seller_balance_before = test.token.balance(&test.seller);
     let contract_balance_before = test.token.balance(&test.contract.address);
-    
+
     test.contract.release_funds(&escrow_id, &test.buyer);
-    
+
     assert_eq!(
         test.token.balance(&test.seller),
         seller_balance_before + ESCROW_AMOUNT as i128
@@ -260,7 +257,7 @@ fn test_release_funds_success() {
         test.token.balance(&test.contract.address),
         contract_balance_before - ESCROW_AMOUNT as i128
     );
-    
+
     let escrow = test.contract.get_escrow(&escrow_id);
     assert_eq!(escrow.status, EscrowStatus::Completed);
     assert!(escrow.completed_at.is_some());
@@ -287,10 +284,11 @@ fn test_release_funds_not_funded() {
 #[test]
 fn test_raise_dispute_by_buyer() {
     let (test, escrow_id) = EscrowTest::setup_with_funded_escrow();
-    
+
     let dispute_reason = String::from_str(&test.env, "Product not as described");
-    test.contract.raise_dispute(&escrow_id, &test.buyer, &dispute_reason);
-    
+    test.contract
+        .raise_dispute(&escrow_id, &test.buyer, &dispute_reason);
+
     let escrow = test.contract.get_escrow(&escrow_id);
     assert_eq!(escrow.status, EscrowStatus::Disputed);
     assert!(escrow.disputed_at.is_some());
@@ -300,10 +298,11 @@ fn test_raise_dispute_by_buyer() {
 #[test]
 fn test_raise_dispute_by_seller() {
     let (test, escrow_id) = EscrowTest::setup_with_funded_escrow();
-    
+
     let dispute_reason = String::from_str(&test.env, "Buyer not cooperating");
-    test.contract.raise_dispute(&escrow_id, &test.seller, &dispute_reason);
-    
+    test.contract
+        .raise_dispute(&escrow_id, &test.seller, &dispute_reason);
+
     let escrow = test.contract.get_escrow(&escrow_id);
     assert_eq!(escrow.status, EscrowStatus::Disputed);
     assert_eq!(escrow.dispute_reason, Some(dispute_reason));
@@ -314,8 +313,10 @@ fn test_raise_dispute_non_participant() {
     let (test, escrow_id) = EscrowTest::setup_with_funded_escrow();
     let outsider = Address::generate(&test.env);
     let dispute_reason = String::from_str(&test.env, "Unauthorized dispute");
-    
-    let result = test.contract.try_raise_dispute(&escrow_id, &outsider, &dispute_reason);
+
+    let result = test
+        .contract
+        .try_raise_dispute(&escrow_id, &outsider, &dispute_reason);
     assert!(result.is_err());
     assert_eq!(result.unwrap_err(), Ok(ContractError::ParticipantOnly));
 }
@@ -325,8 +326,10 @@ fn test_raise_dispute_not_funded() {
     let test = EscrowTest::setup();
     let escrow_id = test.create_escrow();
     let dispute_reason = String::from_str(&test.env, "Invalid dispute");
-    
-    let result = test.contract.try_raise_dispute(&escrow_id, &test.buyer, &dispute_reason);
+
+    let result = test
+        .contract
+        .try_raise_dispute(&escrow_id, &test.buyer, &dispute_reason);
     assert!(result.is_err());
     assert_eq!(result.unwrap_err(), Ok(ContractError::EscrowNotFunded));
 }
@@ -335,15 +338,16 @@ fn test_raise_dispute_not_funded() {
 #[test]
 fn test_arbitrate_release_to_seller() {
     let (test, escrow_id) = EscrowTest::setup_with_funded_escrow();
-    
+
     let dispute_reason = String::from_str(&test.env, "Dispute reason");
-    test.contract.raise_dispute(&escrow_id, &test.buyer, &dispute_reason);
-    
+    test.contract
+        .raise_dispute(&escrow_id, &test.buyer, &dispute_reason);
+
     let seller_balance_before = test.token.balance(&test.seller);
     let contract_balance_before = test.token.balance(&test.contract.address);
-    
+
     test.contract.arbitrate(&escrow_id, &test.arbitrator, &true);
-    
+
     assert_eq!(
         test.token.balance(&test.seller),
         seller_balance_before + ESCROW_AMOUNT as i128
@@ -352,7 +356,7 @@ fn test_arbitrate_release_to_seller() {
         test.token.balance(&test.contract.address),
         contract_balance_before - ESCROW_AMOUNT as i128
     );
-    
+
     let escrow = test.contract.get_escrow(&escrow_id);
     assert_eq!(escrow.status, EscrowStatus::Completed);
     assert!(escrow.completed_at.is_some());
@@ -361,15 +365,17 @@ fn test_arbitrate_release_to_seller() {
 #[test]
 fn test_arbitrate_refund_to_buyer() {
     let (test, escrow_id) = EscrowTest::setup_with_funded_escrow();
-    
+
     let dispute_reason = String::from_str(&test.env, "Dispute reason");
-    test.contract.raise_dispute(&escrow_id, &test.buyer, &dispute_reason);
-    
+    test.contract
+        .raise_dispute(&escrow_id, &test.buyer, &dispute_reason);
+
     let buyer_balance_before = test.token.balance(&test.buyer);
     let contract_balance_before = test.token.balance(&test.contract.address);
-    
-    test.contract.arbitrate(&escrow_id, &test.arbitrator, &false);
-    
+
+    test.contract
+        .arbitrate(&escrow_id, &test.arbitrator, &false);
+
     assert_eq!(
         test.token.balance(&test.buyer),
         buyer_balance_before + ESCROW_AMOUNT as i128
@@ -378,7 +384,7 @@ fn test_arbitrate_refund_to_buyer() {
         test.token.balance(&test.contract.address),
         contract_balance_before - ESCROW_AMOUNT as i128
     );
-    
+
     let escrow = test.contract.get_escrow(&escrow_id);
     assert_eq!(escrow.status, EscrowStatus::Completed);
 }
@@ -386,10 +392,11 @@ fn test_arbitrate_refund_to_buyer() {
 #[test]
 fn test_arbitrate_non_arbitrator() {
     let (test, escrow_id) = EscrowTest::setup_with_funded_escrow();
-    
+
     let dispute_reason = String::from_str(&test.env, "Dispute reason");
-    test.contract.raise_dispute(&escrow_id, &test.buyer, &dispute_reason);
-    
+    test.contract
+        .raise_dispute(&escrow_id, &test.buyer, &dispute_reason);
+
     let result = test.contract.try_arbitrate(&escrow_id, &test.buyer, &true);
     assert!(result.is_err());
     assert_eq!(result.unwrap_err(), Ok(ContractError::ArbitratorOnly));
@@ -398,8 +405,10 @@ fn test_arbitrate_non_arbitrator() {
 #[test]
 fn test_arbitrate_not_disputed() {
     let (test, escrow_id) = EscrowTest::setup_with_funded_escrow();
-    
-    let result = test.contract.try_arbitrate(&escrow_id, &test.arbitrator, &true);
+
+    let result = test
+        .contract
+        .try_arbitrate(&escrow_id, &test.arbitrator, &true);
     assert!(result.is_err());
     assert_eq!(result.unwrap_err(), Ok(ContractError::EscrowNotDisputed));
 }
@@ -408,12 +417,12 @@ fn test_arbitrate_not_disputed() {
 #[test]
 fn test_refund_by_buyer() {
     let (test, escrow_id) = EscrowTest::setup_with_funded_escrow();
-    
+
     let buyer_balance_before = test.token.balance(&test.buyer);
     let contract_balance_before = test.token.balance(&test.contract.address);
-    
+
     test.contract.refund(&escrow_id, &test.buyer);
-    
+
     assert_eq!(
         test.token.balance(&test.buyer),
         buyer_balance_before + ESCROW_AMOUNT as i128
@@ -422,7 +431,7 @@ fn test_refund_by_buyer() {
         test.token.balance(&test.contract.address),
         contract_balance_before - ESCROW_AMOUNT as i128
     );
-    
+
     let escrow = test.contract.get_escrow(&escrow_id);
     assert_eq!(escrow.status, EscrowStatus::Cancelled);
     assert!(escrow.completed_at.is_some());
@@ -431,16 +440,16 @@ fn test_refund_by_buyer() {
 #[test]
 fn test_refund_by_seller() {
     let (test, escrow_id) = EscrowTest::setup_with_funded_escrow();
-    
+
     let buyer_balance_before = test.token.balance(&test.buyer);
-    
+
     test.contract.refund(&escrow_id, &test.seller);
-    
+
     assert_eq!(
         test.token.balance(&test.buyer),
         buyer_balance_before + ESCROW_AMOUNT as i128
     );
-    
+
     let escrow = test.contract.get_escrow(&escrow_id);
     assert_eq!(escrow.status, EscrowStatus::Cancelled);
 }
@@ -449,7 +458,7 @@ fn test_refund_by_seller() {
 fn test_refund_non_participant() {
     let (test, escrow_id) = EscrowTest::setup_with_funded_escrow();
     let outsider = Address::generate(&test.env);
-    
+
     let result = test.contract.try_refund(&escrow_id, &outsider);
     assert!(result.is_err());
     assert_eq!(result.unwrap_err(), Ok(ContractError::ParticipantOnly));
@@ -459,7 +468,7 @@ fn test_refund_non_participant() {
 fn test_refund_not_funded() {
     let test = EscrowTest::setup();
     let escrow_id = test.create_escrow();
-    
+
     let result = test.contract.try_refund(&escrow_id, &test.buyer);
     assert!(result.is_err());
     assert_eq!(result.unwrap_err(), Ok(ContractError::OperationNotAllowed));
@@ -468,10 +477,11 @@ fn test_refund_not_funded() {
 #[test]
 fn test_refund_disputed_escrow() {
     let (test, escrow_id) = EscrowTest::setup_with_funded_escrow();
-    
+
     let dispute_reason = String::from_str(&test.env, "Dispute reason");
-    test.contract.raise_dispute(&escrow_id, &test.buyer, &dispute_reason);
-    
+    test.contract
+        .raise_dispute(&escrow_id, &test.buyer, &dispute_reason);
+
     let result = test.contract.try_refund(&escrow_id, &test.buyer);
     assert!(result.is_err());
     assert_eq!(result.unwrap_err(), Ok(ContractError::OperationNotAllowed));
@@ -481,12 +491,15 @@ fn test_refund_disputed_escrow() {
 #[test]
 fn test_duplicate_dispute_attempt() {
     let (test, escrow_id) = EscrowTest::setup_with_funded_escrow();
-    
+
     let dispute_reason1 = String::from_str(&test.env, "First dispute");
-    test.contract.raise_dispute(&escrow_id, &test.buyer, &dispute_reason1);
-    
+    test.contract
+        .raise_dispute(&escrow_id, &test.buyer, &dispute_reason1);
+
     let dispute_reason2 = String::from_str(&test.env, "Second dispute");
-    let result = test.contract.try_raise_dispute(&escrow_id, &test.seller, &dispute_reason2);
+    let result = test
+        .contract
+        .try_raise_dispute(&escrow_id, &test.seller, &dispute_reason2);
     assert!(result.is_err());
     assert_eq!(result.unwrap_err(), Ok(ContractError::EscrowNotFunded));
 }
@@ -494,14 +507,17 @@ fn test_duplicate_dispute_attempt() {
 #[test]
 fn test_multiple_arbitration_attempts() {
     let (test, escrow_id) = EscrowTest::setup_with_funded_escrow();
-    
+
     let dispute_reason = String::from_str(&test.env, "Dispute reason");
-    test.contract.raise_dispute(&escrow_id, &test.buyer, &dispute_reason);
-    
+    test.contract
+        .raise_dispute(&escrow_id, &test.buyer, &dispute_reason);
+
     test.contract.arbitrate(&escrow_id, &test.arbitrator, &true);
-    
+
     // Try to arbitrate again
-    let result = test.contract.try_arbitrate(&escrow_id, &test.arbitrator, &false);
+    let result = test
+        .contract
+        .try_arbitrate(&escrow_id, &test.arbitrator, &false);
     assert!(result.is_err());
     assert_eq!(result.unwrap_err(), Ok(ContractError::EscrowNotDisputed));
 }
@@ -509,20 +525,22 @@ fn test_multiple_arbitration_attempts() {
 #[test]
 fn test_operations_on_completed_escrow() {
     let (test, escrow_id) = EscrowTest::setup_with_funded_escrow();
-    
+
     // Complete the escrow
     test.contract.release_funds(&escrow_id, &test.buyer);
-    
+
     // Try various operations on completed escrow
     let result = test.contract.try_release_funds(&escrow_id, &test.buyer);
     assert!(result.is_err());
     assert_eq!(result.unwrap_err(), Ok(ContractError::EscrowNotFunded));
-    
+
     let dispute_reason = String::from_str(&test.env, "Invalid dispute");
-    let result = test.contract.try_raise_dispute(&escrow_id, &test.buyer, &dispute_reason);
+    let result = test
+        .contract
+        .try_raise_dispute(&escrow_id, &test.buyer, &dispute_reason);
     assert!(result.is_err());
     assert_eq!(result.unwrap_err(), Ok(ContractError::EscrowNotFunded));
-    
+
     let result = test.contract.try_refund(&escrow_id, &test.buyer);
     assert!(result.is_err());
     assert_eq!(result.unwrap_err(), Ok(ContractError::OperationNotAllowed));
@@ -531,25 +549,25 @@ fn test_operations_on_completed_escrow() {
 #[test]
 fn test_get_user_escrows_pagination() {
     let test = EscrowTest::setup();
-    
+
     // Create multiple escrows
     let mut escrow_ids = std::vec![];
     for _ in 0..5 {
         let escrow_id = test.create_escrow();
         escrow_ids.push(escrow_id);
     }
-    
+
     // Test pagination
     let first_page = test.contract.get_user_escrows(&test.buyer, &0, &3);
     assert_eq!(first_page.len(), 3);
-    
+
     let second_page = test.contract.get_user_escrows(&test.buyer, &3, &3);
     assert_eq!(second_page.len(), 2);
-    
+
     // Test seller's escrows
     let seller_escrows = test.contract.get_user_escrows(&test.seller, &0, &10);
     assert_eq!(seller_escrows.len(), 5);
-    
+
     // Test arbitrator's escrows
     let arbitrator_escrows = test.contract.get_user_escrows(&test.arbitrator, &0, &10);
     assert_eq!(arbitrator_escrows.len(), 5);
@@ -559,17 +577,19 @@ fn test_get_user_escrows_pagination() {
 fn test_unauthorized_actions_protection() {
     let (test, escrow_id) = EscrowTest::setup_with_funded_escrow();
     let unauthorized = Address::generate(&test.env);
-    
+
     // Test various unauthorized access attempts
     let result = test.contract.try_release_funds(&escrow_id, &unauthorized);
     assert!(result.is_err());
     assert_eq!(result.unwrap_err(), Ok(ContractError::BuyerOnly));
-    
+
     let dispute_reason = String::from_str(&test.env, "Unauthorized dispute");
-    let result = test.contract.try_raise_dispute(&escrow_id, &unauthorized, &dispute_reason);
+    let result = test
+        .contract
+        .try_raise_dispute(&escrow_id, &unauthorized, &dispute_reason);
     assert!(result.is_err());
     assert_eq!(result.unwrap_err(), Ok(ContractError::ParticipantOnly));
-    
+
     let result = test.contract.try_refund(&escrow_id, &unauthorized);
     assert!(result.is_err());
     assert_eq!(result.unwrap_err(), Ok(ContractError::ParticipantOnly));

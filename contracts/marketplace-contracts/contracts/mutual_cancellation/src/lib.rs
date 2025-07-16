@@ -1,8 +1,8 @@
 #![no_std]
 
 mod contract;
-mod storage_types;
 mod events;
+mod storage_types;
 mod test;
 
-pub use crate::contract::MutualCancellationClient; 
+pub use crate::contract::MutualCancellationClient;

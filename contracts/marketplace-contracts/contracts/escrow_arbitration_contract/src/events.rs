@@ -1,4 +1,4 @@
-use soroban_sdk::{contracttype, Address, Env, String};
+use soroban_sdk::{Address, Env, String, contracttype};
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -101,12 +101,7 @@ pub fn emit_funds_released(
     env.events().publish(("funds_released",), event);
 }
 
-pub fn emit_dispute_raised(
-    env: &Env,
-    escrow_id: u64,
-    disputer: Address,
-    reason: String,
-) {
+pub fn emit_dispute_raised(env: &Env, escrow_id: u64, disputer: Address, reason: String) {
     let event = DisputeRaisedEvent {
         escrow_id,
         disputer,

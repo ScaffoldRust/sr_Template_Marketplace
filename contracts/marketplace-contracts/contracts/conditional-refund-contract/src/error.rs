@@ -7,14 +7,14 @@ pub enum ContractError {
     // Initialization errors
     AlreadyInitialized = 1,
     NotInitialized = 2,
-    
+
     // Authorization errors
     Unauthorized = 3,
     AdminOnly = 4,
     BuyerOnly = 5,
     SellerOnly = 6,
     ParticipantOnly = 7,
-    
+
     // Contract errors
     ContractNotFound = 8,
     ContractAlreadyFunded = 9,
@@ -22,7 +22,7 @@ pub enum ContractError {
     ContractCancelled = 11,
     ContractCompleted = 12,
     ContractExpired = 13,
-    
+
     // Refund errors
     RefundNotRequested = 14,
     RefundAlreadyRequested = 15,
@@ -32,12 +32,12 @@ pub enum ContractError {
     DeliveryDeadlinePassed = 19,
     DeliveryAlreadyConfirmed = 20,
     DeliveryNotMarked = 21,
-    
+
     // Payment errors
     InsufficientBalance = 22,
     TransferFailed = 23,
     InvalidAmount = 24,
-    
+
     // General errors
     InvalidInput = 25,
     DataNotFound = 26,

@@ -1,4 +1,4 @@
-use soroban_sdk::{contracttype, symbol_short, Address, Env, String, Symbol, Vec};
+use soroban_sdk::{Address, Env, String, Symbol, Vec, contracttype, symbol_short};
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -76,7 +76,11 @@ const CONTRACT_COUNTER: Symbol = symbol_short!("CTR_CNT");
 
 // Contract ID generation - using sequential counter
 pub fn get_next_contract_id(env: &Env) -> u64 {
-    let current = env.storage().instance().get(&CONTRACT_COUNTER).unwrap_or(0u64);
+    let current = env
+        .storage()
+        .instance()
+        .get(&CONTRACT_COUNTER)
+        .unwrap_or(0u64);
     let next = current + 1;
     env.storage().instance().set(&CONTRACT_COUNTER, &next);
     next
@@ -108,7 +112,10 @@ pub fn set_milestone(env: &Env, contract_id: u64, milestone: &Milestone) {
 // User contracts storage functions
 pub fn get_user_contracts(env: &Env, user: &Address) -> Vec<u64> {
     let key = StorageKey::UserContracts(user.clone());
-    env.storage().persistent().get(&key).unwrap_or(Vec::new(env))
+    env.storage()
+        .persistent()
+        .get(&key)
+        .unwrap_or(Vec::new(env))
 }
 
 pub fn add_user_contract(env: &Env, user: &Address, contract_id: u64) {
@@ -121,7 +128,10 @@ pub fn add_user_contract(env: &Env, user: &Address, contract_id: u64) {
 // Contract milestones list storage
 pub fn get_contract_milestone_ids(env: &Env, contract_id: u64) -> Vec<u32> {
     let key = StorageKey::ContractMilestones(contract_id);
-    env.storage().persistent().get(&key).unwrap_or(Vec::new(env))
+    env.storage()
+        .persistent()
+        .get(&key)
+        .unwrap_or(Vec::new(env))
 }
 
 pub fn set_contract_milestone_ids(env: &Env, contract_id: u64, milestone_ids: &Vec<u32>) {

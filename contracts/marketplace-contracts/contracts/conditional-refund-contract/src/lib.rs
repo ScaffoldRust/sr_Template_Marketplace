@@ -1,19 +1,17 @@
 #![no_std]
 
+mod contract;
 mod error;
 mod events;
-mod storage;
 mod refund_storage;
-mod contract;
+mod storage;
 mod test;
 
-use soroban_sdk::{
-    contract, contractimpl, Address, Env, String,
-};
+use soroban_sdk::{Address, Env, String, contract, contractimpl};
 
+pub use contract::*;
 pub use error::*;
 pub use events::*;
-pub use contract::*;
 
 #[contract]
 pub struct ConditionalRefundContract;
@@ -43,23 +41,19 @@ impl ConditionalRefundContract {
     ) -> Result<u64, ContractError> {
         buyer.require_auth();
         contract::create_refund_contract(
-            &env, 
-            &buyer, 
-            &seller, 
-            &token, 
-            amount, 
-            refund_deadline, 
-            delivery_deadline, 
-            refund_conditions
+            &env,
+            &buyer,
+            &seller,
+            &token,
+            amount,
+            refund_deadline,
+            delivery_deadline,
+            refund_conditions,
         )
     }
 
     /// Fund the contract by locking tokens in escrow
-    pub fn fund_contract(
-        env: Env,
-        contract_id: u64,
-        buyer: Address,
-    ) -> Result<(), ContractError> {
+    pub fn fund_contract(env: Env, contract_id: u64, buyer: Address) -> Result<(), ContractError> {
         buyer.require_auth();
         contract::fund_contract(&env, contract_id, &buyer)
     }
@@ -96,10 +90,7 @@ impl ConditionalRefundContract {
     }
 
     /// Process automatic refund if conditions are met
-    pub fn process_automatic_refund(
-        env: Env,
-        contract_id: u64,
-    ) -> Result<(), ContractError> {
+    pub fn process_automatic_refund(env: Env, contract_id: u64) -> Result<(), ContractError> {
         contract::process_automatic_refund(&env, contract_id)
     }
 

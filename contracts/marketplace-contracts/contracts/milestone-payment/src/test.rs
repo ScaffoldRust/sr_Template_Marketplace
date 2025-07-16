@@ -1,14 +1,10 @@
 #![cfg(test)]
 extern crate std;
 
-use crate::{MilestonePaymentContract, MilestonePaymentContractClient};
-use crate::milestone_storage::{MilestoneData, MilestoneStatus, ContractStatus};
 use crate::error::ContractError;
-use soroban_sdk::{
-    vec,
-    testutils::Address as _,
-    token, Address, Env, String,
-};
+use crate::milestone_storage::{ContractStatus, MilestoneData, MilestoneStatus};
+use crate::{MilestonePaymentContract, MilestonePaymentContractClient};
+use soroban_sdk::{Address, Env, String, testutils::Address as _, token, vec};
 use token::Client as TokenClient;
 use token::StellarAssetClient as TokenAdminClient;
 
@@ -47,18 +43,18 @@ impl<'a> MilestoneTest<'a> {
     fn setup() -> Self {
         let env = Env::default();
         env.mock_all_auths();
-        
+
         let admin = Address::generate(&env);
         let buyer = Address::generate(&env);
         let seller = Address::generate(&env);
         let token_admin = Address::generate(&env);
-        
+
         let (token, token_admin_client) = create_token_contract(&env, &token_admin);
         token_admin_client.mint(&buyer, &(TOTAL_AMOUNT as i128));
-        
+
         let contract = create_milestone_contract(&env);
         let _ = contract.initialize(&admin);
-        
+
         let mut milestones = vec![&env];
         milestones.push_back(MilestoneData {
             description: String::from_str(&env, "First milestone"),
@@ -75,7 +71,7 @@ impl<'a> MilestoneTest<'a> {
             amount: MILESTONE_AMOUNT_3,
             release_criteria: String::from_str(&env, "Complete deployment"),
         });
-        
+
         MilestoneTest {
             env,
             admin,
@@ -86,7 +82,7 @@ impl<'a> MilestoneTest<'a> {
             milestones,
         }
     }
-    
+
     fn create_contract(&self) -> u64 {
         self.contract.create_contract(
             &self.buyer,
@@ -96,11 +92,11 @@ impl<'a> MilestoneTest<'a> {
             &self.milestones,
         )
     }
-    
+
     fn fund_contract(&self, contract_id: u64) {
         self.contract.fund_contract(&contract_id, &self.buyer);
     }
-    
+
     fn setup_with_funded_contract() -> (Self, u64) {
         let test = Self::setup();
         let contract_id = test.create_contract();
@@ -134,7 +130,7 @@ fn test_initialize_duplicate() {
 fn test_create_contract_success() {
     let test = MilestoneTest::setup();
     let contract_id = test.create_contract();
-    
+
     let contract_data = test.contract.get_contract(&contract_id);
     assert_eq!(contract_data.buyer, test.buyer);
     assert_eq!(contract_data.seller, test.seller);
@@ -210,7 +206,7 @@ fn test_create_contract_zero_milestone_amount() {
         amount: 0,
         release_criteria: String::from_str(&test.env, "Invalid criteria"),
     });
-    
+
     let result = test.contract.try_create_contract(
         &test.buyer,
         &test.seller,
@@ -227,12 +223,12 @@ fn test_create_contract_zero_milestone_amount() {
 fn test_fund_contract_success() {
     let test = MilestoneTest::setup();
     let contract_id = test.create_contract();
-    
+
     let buyer_balance_before = test.token.balance(&test.buyer);
     let contract_balance_before = test.token.balance(&test.contract.address);
-    
+
     test.fund_contract(contract_id);
-    
+
     assert_eq!(
         test.token.balance(&test.buyer),
         buyer_balance_before - TOTAL_AMOUNT as i128
@@ -241,7 +237,7 @@ fn test_fund_contract_success() {
         test.token.balance(&test.contract.address),
         contract_balance_before + TOTAL_AMOUNT as i128
     );
-    
+
     let contract_data = test.contract.get_contract(&contract_id);
     assert_eq!(contract_data.status, ContractStatus::Funded);
     assert_eq!(contract_data.escrowed_amount, TOTAL_AMOUNT);
@@ -261,10 +257,13 @@ fn test_fund_contract_already_funded() {
     let test = MilestoneTest::setup();
     let contract_id = test.create_contract();
     test.fund_contract(contract_id);
-    
+
     let result = test.contract.try_fund_contract(&contract_id, &test.buyer);
     assert!(result.is_err());
-    assert_eq!(result.unwrap_err(), Ok(ContractError::ContractAlreadyFunded));
+    assert_eq!(
+        result.unwrap_err(),
+        Ok(ContractError::ContractAlreadyFunded)
+    );
 }
 
 #[test]
@@ -279,9 +278,10 @@ fn test_fund_nonexistent_contract() {
 #[test]
 fn test_complete_milestone_success() {
     let (test, contract_id) = MilestoneTest::setup_with_funded_contract();
-    
-    test.contract.complete_milestone(&contract_id, &0, &test.seller);
-    
+
+    test.contract
+        .complete_milestone(&contract_id, &0, &test.seller);
+
     let milestone = test.contract.get_milestone(&contract_id, &0);
     assert_eq!(milestone.status, MilestoneStatus::Completed);
     assert!(milestone.completed_at.is_some());
@@ -291,7 +291,9 @@ fn test_complete_milestone_success() {
 fn test_complete_milestone_unfunded_contract() {
     let test = MilestoneTest::setup();
     let contract_id = test.create_contract();
-    let result = test.contract.try_complete_milestone(&contract_id, &0, &test.seller);
+    let result = test
+        .contract
+        .try_complete_milestone(&contract_id, &0, &test.seller);
     assert!(result.is_err());
     assert_eq!(result.unwrap_err(), Ok(ContractError::ContractNotFunded));
 }
@@ -299,7 +301,9 @@ fn test_complete_milestone_unfunded_contract() {
 #[test]
 fn test_complete_milestone_non_seller() {
     let (test, contract_id) = MilestoneTest::setup_with_funded_contract();
-    let result = test.contract.try_complete_milestone(&contract_id, &0, &test.buyer);
+    let result = test
+        .contract
+        .try_complete_milestone(&contract_id, &0, &test.buyer);
     assert!(result.is_err());
     assert_eq!(result.unwrap_err(), Ok(ContractError::SellerOnly));
 }
@@ -307,17 +311,25 @@ fn test_complete_milestone_non_seller() {
 #[test]
 fn test_complete_milestone_already_completed() {
     let (test, contract_id) = MilestoneTest::setup_with_funded_contract();
-    test.contract.complete_milestone(&contract_id, &0, &test.seller);
-    
-    let result = test.contract.try_complete_milestone(&contract_id, &0, &test.seller);
+    test.contract
+        .complete_milestone(&contract_id, &0, &test.seller);
+
+    let result = test
+        .contract
+        .try_complete_milestone(&contract_id, &0, &test.seller);
     assert!(result.is_err());
-    assert_eq!(result.unwrap_err(), Ok(ContractError::MilestoneAlreadyCompleted));
+    assert_eq!(
+        result.unwrap_err(),
+        Ok(ContractError::MilestoneAlreadyCompleted)
+    );
 }
 
 #[test]
 fn test_complete_nonexistent_milestone() {
     let (test, contract_id) = MilestoneTest::setup_with_funded_contract();
-    let result = test.contract.try_complete_milestone(&contract_id, &999, &test.seller);
+    let result = test
+        .contract
+        .try_complete_milestone(&contract_id, &999, &test.seller);
     assert!(result.is_err());
     assert_eq!(result.unwrap_err(), Ok(ContractError::MilestoneNotFound));
 }
@@ -326,14 +338,16 @@ fn test_complete_nonexistent_milestone() {
 #[test]
 fn test_approve_milestone_success() {
     let (test, contract_id) = MilestoneTest::setup_with_funded_contract();
-    
-    test.contract.complete_milestone(&contract_id, &0, &test.seller);
-    
+
+    test.contract
+        .complete_milestone(&contract_id, &0, &test.seller);
+
     let seller_balance_before = test.token.balance(&test.seller);
     let contract_balance_before = test.token.balance(&test.contract.address);
-    
-    test.contract.approve_milestone(&contract_id, &0, &test.buyer);
-    
+
+    test.contract
+        .approve_milestone(&contract_id, &0, &test.buyer);
+
     assert_eq!(
         test.token.balance(&test.seller),
         seller_balance_before + MILESTONE_AMOUNT_1 as i128
@@ -342,21 +356,27 @@ fn test_approve_milestone_success() {
         test.token.balance(&test.contract.address),
         contract_balance_before - MILESTONE_AMOUNT_1 as i128
     );
-    
+
     let milestone = test.contract.get_milestone(&contract_id, &0);
     assert_eq!(milestone.status, MilestoneStatus::Approved);
-    
+
     let contract_data = test.contract.get_contract(&contract_id);
     assert_eq!(contract_data.released_amount, MILESTONE_AMOUNT_1);
-    assert_eq!(contract_data.escrowed_amount, TOTAL_AMOUNT - MILESTONE_AMOUNT_1);
+    assert_eq!(
+        contract_data.escrowed_amount,
+        TOTAL_AMOUNT - MILESTONE_AMOUNT_1
+    );
 }
 
 #[test]
 fn test_approve_milestone_non_buyer() {
     let (test, contract_id) = MilestoneTest::setup_with_funded_contract();
-    test.contract.complete_milestone(&contract_id, &0, &test.seller);
-    
-    let result = test.contract.try_approve_milestone(&contract_id, &0, &test.seller);
+    test.contract
+        .complete_milestone(&contract_id, &0, &test.seller);
+
+    let result = test
+        .contract
+        .try_approve_milestone(&contract_id, &0, &test.seller);
     assert!(result.is_err());
     assert_eq!(result.unwrap_err(), Ok(ContractError::BuyerOnly));
 }
@@ -364,21 +384,28 @@ fn test_approve_milestone_non_buyer() {
 #[test]
 fn test_approve_milestone_not_completed() {
     let (test, contract_id) = MilestoneTest::setup_with_funded_contract();
-    let result = test.contract.try_approve_milestone(&contract_id, &0, &test.buyer);
+    let result = test
+        .contract
+        .try_approve_milestone(&contract_id, &0, &test.buyer);
     assert!(result.is_err());
-    assert_eq!(result.unwrap_err(), Ok(ContractError::MilestoneNotCompleted));
+    assert_eq!(
+        result.unwrap_err(),
+        Ok(ContractError::MilestoneNotCompleted)
+    );
 }
 
 #[test]
 fn test_complete_all_milestones_contract_completion() {
     let (test, contract_id) = MilestoneTest::setup_with_funded_contract();
-    
+
     // Complete and approve all milestones
     for i in 0..3u32 {
-        test.contract.complete_milestone(&contract_id, &i, &test.seller);
-        test.contract.approve_milestone(&contract_id, &i, &test.buyer);
+        test.contract
+            .complete_milestone(&contract_id, &i, &test.seller);
+        test.contract
+            .approve_milestone(&contract_id, &i, &test.buyer);
     }
-    
+
     let contract_data = test.contract.get_contract(&contract_id);
     assert_eq!(contract_data.status, ContractStatus::Completed);
     assert_eq!(contract_data.released_amount, TOTAL_AMOUNT);
@@ -390,12 +417,14 @@ fn test_complete_all_milestones_contract_completion() {
 #[test]
 fn test_dispute_milestone_success() {
     let (test, contract_id) = MilestoneTest::setup_with_funded_contract();
-    
-    test.contract.complete_milestone(&contract_id, &0, &test.seller);
-    
+
+    test.contract
+        .complete_milestone(&contract_id, &0, &test.seller);
+
     let dispute_reason = String::from_str(&test.env, "Work not satisfactory");
-    test.contract.dispute_milestone(&contract_id, &0, &test.buyer, &dispute_reason);
-    
+    test.contract
+        .dispute_milestone(&contract_id, &0, &test.buyer, &dispute_reason);
+
     let milestone = test.contract.get_milestone(&contract_id, &0);
     assert_eq!(milestone.status, MilestoneStatus::Disputed);
     assert_eq!(milestone.dispute_reason, Some(dispute_reason));
@@ -405,11 +434,14 @@ fn test_dispute_milestone_success() {
 #[test]
 fn test_dispute_milestone_non_participant() {
     let (test, contract_id) = MilestoneTest::setup_with_funded_contract();
-    test.contract.complete_milestone(&contract_id, &0, &test.seller);
-    
+    test.contract
+        .complete_milestone(&contract_id, &0, &test.seller);
+
     let outsider = Address::generate(&test.env);
     let dispute_reason = String::from_str(&test.env, "Unauthorized dispute");
-    let result = test.contract.try_dispute_milestone(&contract_id, &0, &outsider, &dispute_reason);
+    let result = test
+        .contract
+        .try_dispute_milestone(&contract_id, &0, &outsider, &dispute_reason);
     assert!(result.is_err());
     assert_eq!(result.unwrap_err(), Ok(ContractError::ParticipantOnly));
 }
@@ -417,31 +449,39 @@ fn test_dispute_milestone_non_participant() {
 #[test]
 fn test_dispute_milestone_not_completed() {
     let (test, contract_id) = MilestoneTest::setup_with_funded_contract();
-    
+
     let dispute_reason = String::from_str(&test.env, "Premature dispute");
-    let result = test.contract.try_dispute_milestone(&contract_id, &0, &test.buyer, &dispute_reason);
+    let result =
+        test.contract
+            .try_dispute_milestone(&contract_id, &0, &test.buyer, &dispute_reason);
     assert!(result.is_err());
-    assert_eq!(result.unwrap_err(), Ok(ContractError::MilestoneNotCompleted));
+    assert_eq!(
+        result.unwrap_err(),
+        Ok(ContractError::MilestoneNotCompleted)
+    );
 }
 
 // Dispute resolution tests
 #[test]
 fn test_resolve_dispute_approve() {
     let (test, contract_id) = MilestoneTest::setup_with_funded_contract();
-    
-    test.contract.complete_milestone(&contract_id, &0, &test.seller);
+
+    test.contract
+        .complete_milestone(&contract_id, &0, &test.seller);
     let dispute_reason = String::from_str(&test.env, "Work not satisfactory");
-    test.contract.dispute_milestone(&contract_id, &0, &test.buyer, &dispute_reason);
-    
+    test.contract
+        .dispute_milestone(&contract_id, &0, &test.buyer, &dispute_reason);
+
     let seller_balance_before = test.token.balance(&test.seller);
-    
-    test.contract.resolve_dispute(&contract_id, &0, &test.admin, &true);
-    
+
+    test.contract
+        .resolve_dispute(&contract_id, &0, &test.admin, &true);
+
     assert_eq!(
         test.token.balance(&test.seller),
         seller_balance_before + MILESTONE_AMOUNT_1 as i128
     );
-    
+
     let milestone = test.contract.get_milestone(&contract_id, &0);
     assert_eq!(milestone.status, MilestoneStatus::Approved);
 }
@@ -449,17 +489,20 @@ fn test_resolve_dispute_approve() {
 #[test]
 fn test_resolve_dispute_reject() {
     let (test, contract_id) = MilestoneTest::setup_with_funded_contract();
-    
-    test.contract.complete_milestone(&contract_id, &0, &test.seller);
+
+    test.contract
+        .complete_milestone(&contract_id, &0, &test.seller);
     let dispute_reason = String::from_str(&test.env, "Work not satisfactory");
-    test.contract.dispute_milestone(&contract_id, &0, &test.buyer, &dispute_reason);
-    
+    test.contract
+        .dispute_milestone(&contract_id, &0, &test.buyer, &dispute_reason);
+
     let seller_balance_before = test.token.balance(&test.seller);
-    
-    test.contract.resolve_dispute(&contract_id, &0, &test.admin, &false);
-    
+
+    test.contract
+        .resolve_dispute(&contract_id, &0, &test.admin, &false);
+
     assert_eq!(test.token.balance(&test.seller), seller_balance_before);
-    
+
     let milestone = test.contract.get_milestone(&contract_id, &0);
     assert_eq!(milestone.status, MilestoneStatus::Resolved);
 }
@@ -467,12 +510,16 @@ fn test_resolve_dispute_reject() {
 #[test]
 fn test_resolve_dispute_non_admin() {
     let (test, contract_id) = MilestoneTest::setup_with_funded_contract();
-    
-    test.contract.complete_milestone(&contract_id, &0, &test.seller);
+
+    test.contract
+        .complete_milestone(&contract_id, &0, &test.seller);
     let dispute_reason = String::from_str(&test.env, "Work not satisfactory");
-    test.contract.dispute_milestone(&contract_id, &0, &test.buyer, &dispute_reason);
-    
-    let result = test.contract.try_resolve_dispute(&contract_id, &0, &test.buyer, &true);
+    test.contract
+        .dispute_milestone(&contract_id, &0, &test.buyer, &dispute_reason);
+
+    let result = test
+        .contract
+        .try_resolve_dispute(&contract_id, &0, &test.buyer, &true);
     assert!(result.is_err());
     assert_eq!(result.unwrap_err(), Ok(ContractError::AdminOnly));
 }
@@ -480,9 +527,12 @@ fn test_resolve_dispute_non_admin() {
 #[test]
 fn test_resolve_dispute_not_disputed() {
     let (test, contract_id) = MilestoneTest::setup_with_funded_contract();
-    
-    test.contract.complete_milestone(&contract_id, &0, &test.seller);
-    let result = test.contract.try_resolve_dispute(&contract_id, &0, &test.admin, &true);
+
+    test.contract
+        .complete_milestone(&contract_id, &0, &test.seller);
+    let result = test
+        .contract
+        .try_resolve_dispute(&contract_id, &0, &test.admin, &true);
     assert!(result.is_err());
     assert_eq!(result.unwrap_err(), Ok(ContractError::MilestoneNotDisputed));
 }
@@ -493,16 +543,16 @@ fn test_cancel_contract_success() {
     let test = MilestoneTest::setup();
     let contract_id = test.create_contract();
     test.fund_contract(contract_id);
-    
+
     let buyer_balance_before = test.token.balance(&test.buyer);
-    
+
     test.contract.cancel_contract(&contract_id, &test.buyer);
-    
+
     assert_eq!(
         test.token.balance(&test.buyer),
         buyer_balance_before + TOTAL_AMOUNT as i128
     );
-    
+
     let contract_data = test.contract.get_contract(&contract_id);
     assert_eq!(contract_data.status, ContractStatus::Cancelled);
     assert_eq!(contract_data.escrowed_amount, 0);
@@ -512,16 +562,18 @@ fn test_cancel_contract_success() {
 #[test]
 fn test_cancel_contract_partial_refund() {
     let (test, contract_id) = MilestoneTest::setup_with_funded_contract();
-    
+
     // Complete and approve one milestone
-    test.contract.complete_milestone(&contract_id, &0, &test.seller);
-    test.contract.approve_milestone(&contract_id, &0, &test.buyer);
-    
+    test.contract
+        .complete_milestone(&contract_id, &0, &test.seller);
+    test.contract
+        .approve_milestone(&contract_id, &0, &test.buyer);
+
     let buyer_balance_before = test.token.balance(&test.buyer);
     let expected_refund = TOTAL_AMOUNT - MILESTONE_AMOUNT_1;
-    
+
     test.contract.cancel_contract(&contract_id, &test.buyer);
-    
+
     assert_eq!(
         test.token.balance(&test.buyer),
         buyer_balance_before + expected_refund as i128
@@ -531,7 +583,7 @@ fn test_cancel_contract_partial_refund() {
 #[test]
 fn test_cancel_contract_non_participant() {
     let (test, contract_id) = MilestoneTest::setup_with_funded_contract();
-    
+
     let outsider = Address::generate(&test.env);
     let result = test.contract.try_cancel_contract(&contract_id, &outsider);
     assert!(result.is_err());
@@ -541,13 +593,15 @@ fn test_cancel_contract_non_participant() {
 #[test]
 fn test_cancel_completed_contract() {
     let (test, contract_id) = MilestoneTest::setup_with_funded_contract();
-    
+
     // Complete all milestones
     for i in 0..3u32 {
-        test.contract.complete_milestone(&contract_id, &i, &test.seller);
-        test.contract.approve_milestone(&contract_id, &i, &test.buyer);
+        test.contract
+            .complete_milestone(&contract_id, &i, &test.seller);
+        test.contract
+            .approve_milestone(&contract_id, &i, &test.buyer);
     }
-    
+
     let result = test.contract.try_cancel_contract(&contract_id, &test.buyer);
     assert!(result.is_err());
     assert_eq!(result.unwrap_err(), Ok(ContractError::OperationNotAllowed));
@@ -556,7 +610,7 @@ fn test_cancel_completed_contract() {
 #[test]
 fn test_cancel_already_cancelled_contract() {
     let (test, contract_id) = MilestoneTest::setup_with_funded_contract();
-    
+
     test.contract.cancel_contract(&contract_id, &test.buyer);
     let result = test.contract.try_cancel_contract(&contract_id, &test.buyer);
     assert!(result.is_err());
@@ -573,7 +627,7 @@ fn test_milestone_exceeding_total_payment() {
         amount: TOTAL_AMOUNT + 1,
         release_criteria: String::from_str(&test.env, "Too much money"),
     });
-    
+
     let result = test.contract.try_create_contract(
         &test.buyer,
         &test.seller,
@@ -588,18 +642,18 @@ fn test_milestone_exceeding_total_payment() {
 #[test]
 fn test_get_user_contracts_pagination() {
     let test = MilestoneTest::setup();
-    
+
     // Create multiple contracts
     let mut contract_ids = std::vec![];
     for _ in 0..5 {
         let contract_id = test.create_contract();
         contract_ids.push(contract_id);
     }
-    
+
     // Test pagination
     let first_page = test.contract.get_user_contracts(&test.buyer, &0, &3);
     assert_eq!(first_page.len(), 3);
-    
+
     let second_page = test.contract.get_user_contracts(&test.buyer, &3, &3);
     assert_eq!(second_page.len(), 2);
 }
@@ -607,10 +661,10 @@ fn test_get_user_contracts_pagination() {
 #[test]
 fn test_get_contract_milestones() {
     let (test, contract_id) = MilestoneTest::setup_with_funded_contract();
-    
+
     let milestones = test.contract.get_contract_milestones(&contract_id);
     assert_eq!(milestones.len(), 3);
-    
+
     for (i, milestone) in milestones.iter().enumerate() {
         assert_eq!(milestone.id, i as u32);
         assert_eq!(milestone.status, MilestoneStatus::Pending);
@@ -620,10 +674,10 @@ fn test_get_contract_milestones() {
 #[test]
 fn test_fund_contract_insufficient_balance() {
     let test = MilestoneTest::setup();
-    
+
     // Create buyer with insufficient balance
     let poor_buyer = Address::generate(&test.env);
-    
+
     let contract_id = test.contract.create_contract(
         &poor_buyer,
         &test.seller,
@@ -631,7 +685,7 @@ fn test_fund_contract_insufficient_balance() {
         &TOTAL_AMOUNT,
         &test.milestones,
     );
-    
+
     // This should fail due to insufficient balance
     let result = test.contract.try_fund_contract(&contract_id, &poor_buyer);
     assert!(result.is_err());
@@ -642,20 +696,27 @@ fn test_fund_contract_insufficient_balance() {
 fn test_unauthorized_access_protection() {
     let (test, contract_id) = MilestoneTest::setup_with_funded_contract();
     let unauthorized = Address::generate(&test.env);
-    
+
     // Test various unauthorized access attempts
-    let result = test.contract.try_complete_milestone(&contract_id, &0, &unauthorized);
+    let result = test
+        .contract
+        .try_complete_milestone(&contract_id, &0, &unauthorized);
     assert!(result.is_err());
     assert_eq!(result.unwrap_err(), Ok(ContractError::SellerOnly));
-    
-    test.contract.complete_milestone(&contract_id, &0, &test.seller);
-    
-    let result = test.contract.try_approve_milestone(&contract_id, &0, &unauthorized);
+
+    test.contract
+        .complete_milestone(&contract_id, &0, &test.seller);
+
+    let result = test
+        .contract
+        .try_approve_milestone(&contract_id, &0, &unauthorized);
     assert!(result.is_err());
     assert_eq!(result.unwrap_err(), Ok(ContractError::BuyerOnly));
-    
+
     let dispute_reason = String::from_str(&test.env, "Unauthorized dispute");
-    let result = test.contract.try_dispute_milestone(&contract_id, &0, &unauthorized, &dispute_reason);
+    let result =
+        test.contract
+            .try_dispute_milestone(&contract_id, &0, &unauthorized, &dispute_reason);
     assert!(result.is_err());
     assert_eq!(result.unwrap_err(), Ok(ContractError::ParticipantOnly));
 }

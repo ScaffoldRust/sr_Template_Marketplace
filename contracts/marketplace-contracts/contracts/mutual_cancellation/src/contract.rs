@@ -1,5 +1,8 @@
 use crate::events::Events;
-use crate::storage_types::{CancellationStatus, DataKey, Transaction, INSTANCE_BUMP_AMOUNT, INSTANCE_LIFETIME_THRESHOLD, TRANSACTION_BUMP_AMOUNT, TRANSACTION_LIFETIME_THRESHOLD};
+use crate::storage_types::{
+    CancellationStatus, DataKey, Transaction, INSTANCE_BUMP_AMOUNT, INSTANCE_LIFETIME_THRESHOLD,
+    TRANSACTION_BUMP_AMOUNT, TRANSACTION_LIFETIME_THRESHOLD,
+};
 use soroban_sdk::{contract, contractimpl, token, vec, Address, Env, Vec};
 
 #[contract]
@@ -78,7 +81,7 @@ impl MutualCancellation {
         env.storage()
             .instance()
             .set(&DataKey::ResponseWindow, &response_window);
-        
+
         env.storage()
             .instance()
             .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
@@ -101,11 +104,7 @@ impl MutualCancellation {
         buyer.require_auth();
 
         // Transfer funds from buyer to the contract
-        token::Client::new(&env, &token).transfer(
-            &buyer,
-            &env.current_contract_address(),
-            &amount,
-        );
+        token::Client::new(&env, &token).transfer(&buyer, &env.current_contract_address(), &amount);
 
         // Generate a new transaction ID
         let id = increment_transaction_counter(&env);
@@ -142,13 +141,13 @@ impl MutualCancellation {
     pub fn get_buyer_transactions(env: Env, buyer: Address) -> Vec<Transaction> {
         let transaction_ids = get_buyer_transactions(&env, &buyer);
         let mut transactions = vec![&env];
-        
+
         for id in transaction_ids.iter() {
             if let Some(tx) = get_transaction(&env, id) {
                 transactions.push_back(tx);
             }
         }
-        
+
         transactions
     }
 
@@ -156,13 +155,13 @@ impl MutualCancellation {
     pub fn get_seller_transactions(env: Env, seller: Address) -> Vec<Transaction> {
         let transaction_ids = get_seller_transactions(&env, &seller);
         let mut transactions = vec![&env];
-        
+
         for id in transaction_ids.iter() {
             if let Some(tx) = get_transaction(&env, id) {
                 transactions.push_back(tx);
             }
         }
-        
+
         transactions
     }
 
@@ -173,14 +172,14 @@ impl MutualCancellation {
         if transaction_opt.is_none() {
             panic!("Transaction not found");
         }
-        
+
         let mut transaction = transaction_opt.unwrap();
-        
+
         // Check if cancellation is already completed
         if transaction.status == CancellationStatus::Completed {
             panic!("Transaction already cancelled");
         }
-        
+
         // Check if there's already a proposal in place
         if transaction.status != CancellationStatus::None {
             // Check if the proposal has expired
@@ -192,17 +191,17 @@ impl MutualCancellation {
                 panic!("Cancellation already proposed");
             }
         }
-        
+
         // Require buyer auth
         transaction.buyer.require_auth();
-                
+
         // Update transaction status
         transaction.status = CancellationStatus::ProposedByBuyer;
         transaction.proposal_timestamp = env.ledger().timestamp();
-        
+
         // Save updated transaction
         save_transaction(&env, &transaction);
-        
+
         // Emit event
         Events::new(&env).cancellation_proposed(&transaction);
     }
@@ -214,14 +213,14 @@ impl MutualCancellation {
         if transaction_opt.is_none() {
             panic!("Transaction not found");
         }
-        
+
         let mut transaction = transaction_opt.unwrap();
-        
+
         // Check if cancellation is already completed
         if transaction.status == CancellationStatus::Completed {
             panic!("Transaction already cancelled");
         }
-        
+
         // Check if there's already a proposal in place
         if transaction.status != CancellationStatus::None {
             // Check if the proposal has expired
@@ -233,17 +232,17 @@ impl MutualCancellation {
                 panic!("Cancellation already proposed");
             }
         }
-        
+
         // Require seller auth
         transaction.seller.require_auth();
-                
+
         // Update transaction status
         transaction.status = CancellationStatus::ProposedBySeller;
         transaction.proposal_timestamp = env.ledger().timestamp();
-        
+
         // Save updated transaction
         save_transaction(&env, &transaction);
-        
+
         // Emit event
         Events::new(&env).cancellation_proposed(&transaction);
     }
@@ -255,19 +254,19 @@ impl MutualCancellation {
         if transaction_opt.is_none() {
             panic!("Transaction not found");
         }
-        
+
         let mut transaction = transaction_opt.unwrap();
-        
+
         // Check if cancellation is already completed
         if transaction.status == CancellationStatus::Completed {
             panic!("Transaction already cancelled");
         }
-        
+
         // Check if there's a proposal in place
         if transaction.status == CancellationStatus::None {
             panic!("No cancellation proposal to agree to");
         }
-        
+
         // Check if the proposal has expired
         let current_time = env.ledger().timestamp();
         if current_time > transaction.proposal_timestamp + transaction.response_window {
@@ -277,31 +276,31 @@ impl MutualCancellation {
             Events::new(&env).cancellation_expired(&transaction);
             panic!("Cancellation proposal has expired");
         }
-        
+
         // Verify the caller is the correct counterparty and require their auth
         match transaction.status {
             CancellationStatus::ProposedByBuyer => {
                 transaction.seller.require_auth(); // Require seller auth
-            },
+            }
             CancellationStatus::ProposedBySeller => {
-                 transaction.buyer.require_auth(); // Require buyer auth
-            },
+                transaction.buyer.require_auth(); // Require buyer auth
+            }
             _ => panic!("Invalid cancellation status"),
         }
-        
+
         // Return funds to buyer
         token::Client::new(&env, &transaction.token).transfer(
             &env.current_contract_address(),
             &transaction.buyer,
             &transaction.amount,
         );
-        
+
         // Update transaction status
         transaction.status = CancellationStatus::Completed;
-        
+
         // Save updated transaction
         save_transaction(&env, &transaction);
-        
+
         // Emit event
         Events::new(&env).cancellation_agreed(&transaction);
     }
@@ -313,20 +312,22 @@ impl MutualCancellation {
         if transaction_opt.is_none() {
             panic!("Transaction not found");
         }
-        
+
         let transaction = transaction_opt.unwrap();
-        
+
         // Check if there's a proposal in place
-        if transaction.status == CancellationStatus::None || transaction.status == CancellationStatus::Completed {
+        if transaction.status == CancellationStatus::None
+            || transaction.status == CancellationStatus::Completed
+        {
             return false;
         }
-        
+
         // Check if the proposal has expired
         let current_time = env.ledger().timestamp();
         if current_time > transaction.proposal_timestamp + transaction.response_window {
             return true;
         }
-        
+
         false
     }
 
@@ -337,26 +338,28 @@ impl MutualCancellation {
         if transaction_opt.is_none() {
             panic!("Transaction not found");
         }
-        
+
         let mut transaction = transaction_opt.unwrap();
-        
+
         // Check if there's a proposal in place
-        if transaction.status == CancellationStatus::None || transaction.status == CancellationStatus::Completed {
+        if transaction.status == CancellationStatus::None
+            || transaction.status == CancellationStatus::Completed
+        {
             panic!("No cancellation proposal to reset");
         }
-        
+
         // Check if the proposal has expired
         let current_time = env.ledger().timestamp();
         if current_time <= transaction.proposal_timestamp + transaction.response_window {
             panic!("Cancellation proposal has not expired");
         }
-        
+
         // Reset proposal
         transaction.status = CancellationStatus::None;
-        
+
         // Save updated transaction
         save_transaction(&env, &transaction);
-        
+
         // Emit event
         Events::new(&env).cancellation_expired(&transaction);
     }
@@ -365,4 +368,4 @@ impl MutualCancellation {
     pub fn get_response_window(env: Env) -> u64 {
         get_response_window(&env)
     }
-} 
+}

@@ -2,7 +2,7 @@ default: build
 
 all: test
 
-test:
+test: build
 	cargo test
 
 c:
@@ -10,7 +10,6 @@ c:
 
 build:
 	stellar contract build
-	@ls -l ../staggered-payment/target/wasm32v1-none/release/*.wasm
 
 fmt:
 	cargo fmt --all

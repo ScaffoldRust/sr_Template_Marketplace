@@ -7,7 +7,7 @@ pub enum ContractError {
     // Initialization errors
     AlreadyInitialized = 1,
     NotInitialized = 2,
-    
+
     // Authorization errors
     Unauthorized = 3,
     AdminOnly = 4,
@@ -15,7 +15,7 @@ pub enum ContractError {
     SellerOnly = 6,
     ArbitratorOnly = 7,
     ParticipantOnly = 8,
-    
+
     // Escrow errors
     EscrowNotFound = 9,
     EscrowAlreadyFunded = 10,
@@ -24,12 +24,12 @@ pub enum ContractError {
     EscrowCancelled = 13,
     EscrowDisputed = 14,
     EscrowNotDisputed = 15,
-    
+
     // Payment errors
     InvalidAmount = 16,
     InsufficientBalance = 17,
     TransferFailed = 18,
-    
+
     // General errors
     InvalidInput = 19,
     DataNotFound = 20,

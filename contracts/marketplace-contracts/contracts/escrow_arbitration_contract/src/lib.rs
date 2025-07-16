@@ -1,19 +1,17 @@
 #![no_std]
 
+mod contract;
 mod error;
+mod escrow_storage;
 mod events;
 mod storage;
-mod escrow_storage;
-mod contract;
 mod test;
 
-use soroban_sdk::{
-    contract, contractimpl, Address, Env, String,
-};
+use soroban_sdk::{Address, Env, String, contract, contractimpl};
 
+pub use contract::*;
 pub use error::*;
 pub use events::*;
-pub use contract::*;
 
 #[contract]
 pub struct EscrowArbitrationContract;
@@ -41,25 +39,25 @@ impl EscrowArbitrationContract {
         description: String,
     ) -> Result<u64, ContractError> {
         buyer.require_auth();
-        contract::create_escrow(&env, &buyer, &seller, &arbitrator, &token, amount, description)
+        contract::create_escrow(
+            &env,
+            &buyer,
+            &seller,
+            &arbitrator,
+            &token,
+            amount,
+            description,
+        )
     }
 
     /// Deposit funds into escrow
-    pub fn deposit(
-        env: Env,
-        escrow_id: u64,
-        buyer: Address,
-    ) -> Result<(), ContractError> {
+    pub fn deposit(env: Env, escrow_id: u64, buyer: Address) -> Result<(), ContractError> {
         buyer.require_auth();
         contract::deposit(&env, escrow_id, &buyer)
     }
 
     /// Release funds to seller (standard release)
-    pub fn release_funds(
-        env: Env,
-        escrow_id: u64,
-        buyer: Address,
-    ) -> Result<(), ContractError> {
+    pub fn release_funds(env: Env, escrow_id: u64, buyer: Address) -> Result<(), ContractError> {
         buyer.require_auth();
         contract::release_funds(&env, escrow_id, &buyer)
     }
@@ -87,20 +85,13 @@ impl EscrowArbitrationContract {
     }
 
     /// Refund funds to buyer
-    pub fn refund(
-        env: Env,
-        escrow_id: u64,
-        requester: Address,
-    ) -> Result<(), ContractError> {
+    pub fn refund(env: Env, escrow_id: u64, requester: Address) -> Result<(), ContractError> {
         requester.require_auth();
         contract::refund(&env, escrow_id, &requester)
     }
 
     /// Get escrow details
-    pub fn get_escrow(
-        env: Env,
-        escrow_id: u64,
-    ) -> Result<escrow_storage::Escrow, ContractError> {
+    pub fn get_escrow(env: Env, escrow_id: u64) -> Result<escrow_storage::Escrow, ContractError> {
         contract::get_escrow(&env, escrow_id)
     }
 

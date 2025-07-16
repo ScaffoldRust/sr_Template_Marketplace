@@ -4,12 +4,30 @@ version = "0.0.0"
 edition = "2021"
 publish = false
 
-[lib]
-crate-type = ["lib", "cdylib"]
-doctest = false
+# [lib]
+# crate-type = ["lib", "cdylib"]
+# doctest = false
+
+# [dependencies]
+# soroban-sdk = { workspace = true }
+
+# [dev-dependencies]
+# soroban-sdk = { workspace = true, features = ["testutils"] }
 
 [dependencies]
+# soroban-sdk = "20.3.0"  # Cambiar según la versión actual usada
 soroban-sdk = { workspace = true }
+
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[profile.release]
+opt-level = "z"        # Tamaño reducido
+codegen-units = 1
+lto = true
+panic = "abort"
+strip = "symbols"

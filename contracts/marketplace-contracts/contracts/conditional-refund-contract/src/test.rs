@@ -1,14 +1,10 @@
 #![cfg(test)]
 extern crate std;
 
-use crate::{ConditionalRefundContract, ConditionalRefundContractClient};
-use crate::refund_storage::ContractStatus;
 use crate::error::ContractError;
-use soroban_sdk::{
-    testutils::Ledger,
-    testutils::Address as _,
-    token, Address, Env, String,
-};
+use crate::refund_storage::ContractStatus;
+use crate::{ConditionalRefundContract, ConditionalRefundContractClient};
+use soroban_sdk::{Address, Env, String, testutils::Address as _, testutils::Ledger, token};
 use token::Client as TokenClient;
 use token::StellarAssetClient as TokenAdminClient;
 
@@ -46,20 +42,20 @@ impl<'a> RefundTest<'a> {
     fn setup() -> Self {
         let env = Env::default();
         env.mock_all_auths();
-        
+
         let admin = Address::generate(&env);
         let buyer = Address::generate(&env);
         let seller = Address::generate(&env);
         let token_admin = Address::generate(&env);
-        
+
         let (token, token_admin_client) = create_token_contract(&env, &token_admin);
         token_admin_client.mint(&buyer, &(REFUND_AMOUNT as i128));
-        
+
         let contract = create_refund_contract(&env);
         let _ = contract.initialize(&admin);
-        
+
         let refund_conditions = String::from_str(&env, "Defective product or not as described");
-        
+
         RefundTest {
             env,
             admin,
@@ -70,7 +66,7 @@ impl<'a> RefundTest<'a> {
             refund_conditions,
         }
     }
-    
+
     fn create_refund_contract(&self) -> u64 {
         self.contract.create_refund_contract(
             &self.buyer,
@@ -82,11 +78,11 @@ impl<'a> RefundTest<'a> {
             &self.refund_conditions,
         )
     }
-    
+
     fn fund_contract(&self, contract_id: u64) {
         self.contract.fund_contract(&contract_id, &self.buyer);
     }
-    
+
     fn setup_with_funded_contract() -> (Self, u64) {
         let test = Self::setup();
         let contract_id = test.create_refund_contract();
@@ -119,7 +115,7 @@ fn test_initialize_duplicate() {
 fn test_create_refund_contract_success() {
     let test = RefundTest::setup();
     let contract_id = test.create_refund_contract();
-    
+
     let contract_data = test.contract.get_contract(&contract_id);
     assert_eq!(contract_data.buyer, test.buyer);
     assert_eq!(contract_data.seller, test.seller);
@@ -184,12 +180,12 @@ fn test_create_refund_contract_deadline_in_past() {
 fn test_fund_contract_success() {
     let test = RefundTest::setup();
     let contract_id = test.create_refund_contract();
-    
+
     let buyer_balance_before = test.token.balance(&test.buyer);
     let contract_balance_before = test.token.balance(&test.contract.address);
-    
+
     test.fund_contract(contract_id);
-    
+
     assert_eq!(
         test.token.balance(&test.buyer),
         buyer_balance_before - REFUND_AMOUNT as i128
@@ -198,7 +194,7 @@ fn test_fund_contract_success() {
         test.token.balance(&test.contract.address),
         contract_balance_before + REFUND_AMOUNT as i128
     );
-    
+
     let contract_data = test.contract.get_contract(&contract_id);
     assert_eq!(contract_data.status, ContractStatus::Funded);
     assert_eq!(contract_data.escrowed_amount, REFUND_AMOUNT);
@@ -218,10 +214,13 @@ fn test_fund_contract_already_funded() {
     let test = RefundTest::setup();
     let contract_id = test.create_refund_contract();
     test.fund_contract(contract_id);
-    
+
     let result = test.contract.try_fund_contract(&contract_id, &test.buyer);
     assert!(result.is_err());
-    assert_eq!(result.unwrap_err(), Ok(ContractError::ContractAlreadyFunded));
+    assert_eq!(
+        result.unwrap_err(),
+        Ok(ContractError::ContractAlreadyFunded)
+    );
 }
 
 #[test]
@@ -236,9 +235,9 @@ fn test_fund_nonexistent_contract() {
 #[test]
 fn test_mark_delivered_success() {
     let (test, contract_id) = RefundTest::setup_with_funded_contract();
-    
+
     test.contract.mark_delivered(&contract_id, &test.seller);
-    
+
     let contract_data = test.contract.get_contract(&contract_id);
     assert_eq!(contract_data.status, ContractStatus::Delivered);
     assert!(contract_data.delivered_at.is_some());
@@ -264,29 +263,32 @@ fn test_mark_delivered_non_seller() {
 #[test]
 fn test_mark_delivered_after_deadline() {
     let (test, contract_id) = RefundTest::setup_with_funded_contract();
-    
+
     // Jump past delivery deadline
     test.env.ledger().with_mut(|li| {
         li.timestamp = DELIVERY_DEADLINE + 100;
     });
-    
+
     let result = test.contract.try_mark_delivered(&contract_id, &test.seller);
     assert!(result.is_err());
-    assert_eq!(result.unwrap_err(), Ok(ContractError::DeliveryDeadlinePassed));
+    assert_eq!(
+        result.unwrap_err(),
+        Ok(ContractError::DeliveryDeadlinePassed)
+    );
 }
 
 // Delivery confirmation tests
 #[test]
 fn test_confirm_delivery_success() {
     let (test, contract_id) = RefundTest::setup_with_funded_contract();
-    
+
     test.contract.mark_delivered(&contract_id, &test.seller);
-    
+
     let seller_balance_before = test.token.balance(&test.seller);
     let contract_balance_before = test.token.balance(&test.contract.address);
-    
+
     test.contract.confirm_delivery(&contract_id, &test.buyer);
-    
+
     assert_eq!(
         test.token.balance(&test.seller),
         seller_balance_before + REFUND_AMOUNT as i128
@@ -295,7 +297,7 @@ fn test_confirm_delivery_success() {
         test.token.balance(&test.contract.address),
         contract_balance_before - REFUND_AMOUNT as i128
     );
-    
+
     let contract_data = test.contract.get_contract(&contract_id);
     assert_eq!(contract_data.status, ContractStatus::Completed);
     assert_eq!(contract_data.escrowed_amount, 0);
@@ -305,8 +307,10 @@ fn test_confirm_delivery_success() {
 fn test_confirm_delivery_non_buyer() {
     let (test, contract_id) = RefundTest::setup_with_funded_contract();
     test.contract.mark_delivered(&contract_id, &test.seller);
-    
-    let result = test.contract.try_confirm_delivery(&contract_id, &test.seller);
+
+    let result = test
+        .contract
+        .try_confirm_delivery(&contract_id, &test.seller);
     assert!(result.is_err());
     assert_eq!(result.unwrap_err(), Ok(ContractError::BuyerOnly));
 }
@@ -314,7 +318,9 @@ fn test_confirm_delivery_non_buyer() {
 #[test]
 fn test_confirm_delivery_not_marked() {
     let (test, contract_id) = RefundTest::setup_with_funded_contract();
-    let result = test.contract.try_confirm_delivery(&contract_id, &test.buyer);
+    let result = test
+        .contract
+        .try_confirm_delivery(&contract_id, &test.buyer);
     assert!(result.is_err());
     assert_eq!(result.unwrap_err(), Ok(ContractError::DeliveryNotMarked));
 }
@@ -323,10 +329,11 @@ fn test_confirm_delivery_not_marked() {
 #[test]
 fn test_request_refund_success() {
     let (test, contract_id) = RefundTest::setup_with_funded_contract();
-    
+
     let refund_reason = String::from_str(&test.env, "Product defective");
-    test.contract.request_refund(&contract_id, &test.buyer, &refund_reason);
-    
+    test.contract
+        .request_refund(&contract_id, &test.buyer, &refund_reason);
+
     let contract_data = test.contract.get_contract(&contract_id);
     assert_eq!(contract_data.status, ContractStatus::RefundRequested);
     assert_eq!(contract_data.refund_reason, Some(refund_reason));
@@ -336,10 +343,12 @@ fn test_request_refund_success() {
 #[test]
 fn test_request_refund_non_participant() {
     let (test, contract_id) = RefundTest::setup_with_funded_contract();
-    
+
     let outsider = Address::generate(&test.env);
     let refund_reason = String::from_str(&test.env, "Unauthorized refund");
-    let result = test.contract.try_request_refund(&contract_id, &outsider, &refund_reason);
+    let result = test
+        .contract
+        .try_request_refund(&contract_id, &outsider, &refund_reason);
     assert!(result.is_err());
     assert_eq!(result.unwrap_err(), Ok(ContractError::ParticipantOnly));
 }
@@ -347,12 +356,14 @@ fn test_request_refund_non_participant() {
 #[test]
 fn test_request_refund_completed_contract() {
     let (test, contract_id) = RefundTest::setup_with_funded_contract();
-    
+
     test.contract.mark_delivered(&contract_id, &test.seller);
     test.contract.confirm_delivery(&contract_id, &test.buyer);
-    
+
     let refund_reason = String::from_str(&test.env, "Too late");
-    let result = test.contract.try_request_refund(&contract_id, &test.buyer, &refund_reason);
+    let result = test
+        .contract
+        .try_request_refund(&contract_id, &test.buyer, &refund_reason);
     assert!(result.is_err());
     assert_eq!(result.unwrap_err(), Ok(ContractError::OperationNotAllowed));
 }
@@ -360,27 +371,35 @@ fn test_request_refund_completed_contract() {
 #[test]
 fn test_request_refund_already_requested() {
     let (test, contract_id) = RefundTest::setup_with_funded_contract();
-    
+
     let refund_reason = String::from_str(&test.env, "First request");
-    test.contract.request_refund(&contract_id, &test.buyer, &refund_reason);
-    
+    test.contract
+        .request_refund(&contract_id, &test.buyer, &refund_reason);
+
     let second_reason = String::from_str(&test.env, "Second request");
-    let result = test.contract.try_request_refund(&contract_id, &test.buyer, &second_reason);
+    let result = test
+        .contract
+        .try_request_refund(&contract_id, &test.buyer, &second_reason);
     assert!(result.is_err());
-    assert_eq!(result.unwrap_err(), Ok(ContractError::RefundAlreadyRequested));
+    assert_eq!(
+        result.unwrap_err(),
+        Ok(ContractError::RefundAlreadyRequested)
+    );
 }
 
 #[test]
 fn test_request_refund_deadline_passed() {
     let (test, contract_id) = RefundTest::setup_with_funded_contract();
-    
+
     // Jump past refund deadline
     test.env.ledger().with_mut(|li| {
         li.timestamp = REFUND_DEADLINE + 100;
     });
-    
+
     let refund_reason = String::from_str(&test.env, "Too late");
-    let result = test.contract.try_request_refund(&contract_id, &test.buyer, &refund_reason);
+    let result = test
+        .contract
+        .try_request_refund(&contract_id, &test.buyer, &refund_reason);
     assert!(result.is_err());
     assert_eq!(result.unwrap_err(), Ok(ContractError::RefundDeadlinePassed));
 }
@@ -389,21 +408,21 @@ fn test_request_refund_deadline_passed() {
 #[test]
 fn test_process_automatic_refund_delivery_deadline_passed() {
     let (test, contract_id) = RefundTest::setup_with_funded_contract();
-    
+
     // Jump past delivery deadline
     test.env.ledger().with_mut(|li| {
         li.timestamp = DELIVERY_DEADLINE + 100;
     });
-    
+
     let buyer_balance_before = test.token.balance(&test.buyer);
-    
+
     test.contract.process_automatic_refund(&contract_id);
-    
+
     assert_eq!(
         test.token.balance(&test.buyer),
         buyer_balance_before + REFUND_AMOUNT as i128
     );
-    
+
     let contract_data = test.contract.get_contract(&contract_id);
     assert_eq!(contract_data.status, ContractStatus::RefundProcessed);
     assert_eq!(contract_data.escrowed_amount, 0);
@@ -412,19 +431,20 @@ fn test_process_automatic_refund_delivery_deadline_passed() {
 #[test]
 fn test_process_automatic_refund_buyer_requested() {
     let (test, contract_id) = RefundTest::setup_with_funded_contract();
-    
+
     let refund_reason = String::from_str(&test.env, "Product defective");
-    test.contract.request_refund(&contract_id, &test.buyer, &refund_reason);
-    
+    test.contract
+        .request_refund(&contract_id, &test.buyer, &refund_reason);
+
     let buyer_balance_before = test.token.balance(&test.buyer);
-    
+
     test.contract.process_automatic_refund(&contract_id);
-    
+
     assert_eq!(
         test.token.balance(&test.buyer),
         buyer_balance_before + REFUND_AMOUNT as i128
     );
-    
+
     let contract_data = test.contract.get_contract(&contract_id);
     assert_eq!(contract_data.status, ContractStatus::RefundProcessed);
 }
@@ -432,23 +452,26 @@ fn test_process_automatic_refund_buyer_requested() {
 #[test]
 fn test_process_automatic_refund_conditions_not_met() {
     let (test, contract_id) = RefundTest::setup_with_funded_contract();
-    
+
     let result = test.contract.try_process_automatic_refund(&contract_id);
     assert!(result.is_err());
-    assert_eq!(result.unwrap_err(), Ok(ContractError::RefundConditionsNotMet));
+    assert_eq!(
+        result.unwrap_err(),
+        Ok(ContractError::RefundConditionsNotMet)
+    );
 }
 
 #[test]
 fn test_process_automatic_refund_already_processed() {
     let (test, contract_id) = RefundTest::setup_with_funded_contract();
-    
+
     // Jump past delivery deadline and process refund
     test.env.ledger().with_mut(|li| {
         li.timestamp = DELIVERY_DEADLINE + 100;
     });
-    
+
     test.contract.process_automatic_refund(&contract_id);
-    
+
     let result = test.contract.try_process_automatic_refund(&contract_id);
     assert!(result.is_err());
 }
@@ -457,19 +480,21 @@ fn test_process_automatic_refund_already_processed() {
 #[test]
 fn test_resolve_refund_dispute_approve() {
     let (test, contract_id) = RefundTest::setup_with_funded_contract();
-    
+
     let refund_reason = String::from_str(&test.env, "Dispute reason");
-    test.contract.request_refund(&contract_id, &test.buyer, &refund_reason);
-    
+    test.contract
+        .request_refund(&contract_id, &test.buyer, &refund_reason);
+
     let buyer_balance_before = test.token.balance(&test.buyer);
-    
-    test.contract.resolve_refund_dispute(&contract_id, &test.admin, &true);
-    
+
+    test.contract
+        .resolve_refund_dispute(&contract_id, &test.admin, &true);
+
     assert_eq!(
         test.token.balance(&test.buyer),
         buyer_balance_before + REFUND_AMOUNT as i128
     );
-    
+
     let contract_data = test.contract.get_contract(&contract_id);
     assert_eq!(contract_data.status, ContractStatus::RefundProcessed);
 }
@@ -477,19 +502,21 @@ fn test_resolve_refund_dispute_approve() {
 #[test]
 fn test_resolve_refund_dispute_reject() {
     let (test, contract_id) = RefundTest::setup_with_funded_contract();
-    
+
     let refund_reason = String::from_str(&test.env, "Dispute reason");
-    test.contract.request_refund(&contract_id, &test.buyer, &refund_reason);
-    
+    test.contract
+        .request_refund(&contract_id, &test.buyer, &refund_reason);
+
     let seller_balance_before = test.token.balance(&test.seller);
-    
-    test.contract.resolve_refund_dispute(&contract_id, &test.admin, &false);
-    
+
+    test.contract
+        .resolve_refund_dispute(&contract_id, &test.admin, &false);
+
     assert_eq!(
         test.token.balance(&test.seller),
         seller_balance_before + REFUND_AMOUNT as i128
     );
-    
+
     let contract_data = test.contract.get_contract(&contract_id);
     assert_eq!(contract_data.status, ContractStatus::Completed);
 }
@@ -497,11 +524,14 @@ fn test_resolve_refund_dispute_reject() {
 #[test]
 fn test_resolve_refund_dispute_non_admin() {
     let (test, contract_id) = RefundTest::setup_with_funded_contract();
-    
+
     let refund_reason = String::from_str(&test.env, "Dispute reason");
-    test.contract.request_refund(&contract_id, &test.buyer, &refund_reason);
-    
-    let result = test.contract.try_resolve_refund_dispute(&contract_id, &test.buyer, &true);
+    test.contract
+        .request_refund(&contract_id, &test.buyer, &refund_reason);
+
+    let result = test
+        .contract
+        .try_resolve_refund_dispute(&contract_id, &test.buyer, &true);
     assert!(result.is_err());
     assert_eq!(result.unwrap_err(), Ok(ContractError::AdminOnly));
 }
@@ -509,8 +539,10 @@ fn test_resolve_refund_dispute_non_admin() {
 #[test]
 fn test_resolve_refund_dispute_not_requested() {
     let (test, contract_id) = RefundTest::setup_with_funded_contract();
-    
-    let result = test.contract.try_resolve_refund_dispute(&contract_id, &test.admin, &true);
+
+    let result = test
+        .contract
+        .try_resolve_refund_dispute(&contract_id, &test.admin, &true);
     assert!(result.is_err());
     assert_eq!(result.unwrap_err(), Ok(ContractError::RefundNotRequested));
 }
@@ -519,16 +551,16 @@ fn test_resolve_refund_dispute_not_requested() {
 #[test]
 fn test_cancel_contract_success() {
     let (test, contract_id) = RefundTest::setup_with_funded_contract();
-    
+
     let buyer_balance_before = test.token.balance(&test.buyer);
-    
+
     test.contract.cancel_contract(&contract_id, &test.buyer);
-    
+
     assert_eq!(
         test.token.balance(&test.buyer),
         buyer_balance_before + REFUND_AMOUNT as i128
     );
-    
+
     let contract_data = test.contract.get_contract(&contract_id);
     assert_eq!(contract_data.status, ContractStatus::Cancelled);
     assert_eq!(contract_data.escrowed_amount, 0);
@@ -537,7 +569,7 @@ fn test_cancel_contract_success() {
 #[test]
 fn test_cancel_contract_non_participant() {
     let (test, contract_id) = RefundTest::setup_with_funded_contract();
-    
+
     let outsider = Address::generate(&test.env);
     let result = test.contract.try_cancel_contract(&contract_id, &outsider);
     assert!(result.is_err());
@@ -547,10 +579,10 @@ fn test_cancel_contract_non_participant() {
 #[test]
 fn test_cancel_completed_contract() {
     let (test, contract_id) = RefundTest::setup_with_funded_contract();
-    
+
     test.contract.mark_delivered(&contract_id, &test.seller);
     test.contract.confirm_delivery(&contract_id, &test.buyer);
-    
+
     let result = test.contract.try_cancel_contract(&contract_id, &test.buyer);
     assert!(result.is_err());
     assert_eq!(result.unwrap_err(), Ok(ContractError::OperationNotAllowed));
@@ -559,9 +591,9 @@ fn test_cancel_completed_contract() {
 #[test]
 fn test_cancel_contract_after_delivery_marked() {
     let (test, contract_id) = RefundTest::setup_with_funded_contract();
-    
+
     test.contract.mark_delivered(&contract_id, &test.seller);
-    
+
     let result = test.contract.try_cancel_contract(&contract_id, &test.buyer);
     assert!(result.is_err());
     assert_eq!(result.unwrap_err(), Ok(ContractError::OperationNotAllowed));
@@ -571,27 +603,33 @@ fn test_cancel_contract_after_delivery_marked() {
 #[test]
 fn test_multiple_refund_attempts() {
     let (test, contract_id) = RefundTest::setup_with_funded_contract();
-    
+
     let refund_reason = String::from_str(&test.env, "First refund");
-    test.contract.request_refund(&contract_id, &test.buyer, &refund_reason);
-    
+    test.contract
+        .request_refund(&contract_id, &test.buyer, &refund_reason);
+
     test.contract.process_automatic_refund(&contract_id);
-    
+
     // Try to process again
     let result = test.contract.try_process_automatic_refund(&contract_id);
     assert!(result.is_err());
-    assert_eq!(result.unwrap_err(), Ok(ContractError::RefundConditionsNotMet));
+    assert_eq!(
+        result.unwrap_err(),
+        Ok(ContractError::RefundConditionsNotMet)
+    );
 }
 
 #[test]
 fn test_invalid_refund_request_on_cancelled_contract() {
     let test = RefundTest::setup();
     let contract_id = test.create_refund_contract();
-    
+
     test.contract.cancel_contract(&contract_id, &test.buyer);
-    
+
     let refund_reason = String::from_str(&test.env, "Invalid request");
-    let result = test.contract.try_request_refund(&contract_id, &test.buyer, &refund_reason);
+    let result = test
+        .contract
+        .try_request_refund(&contract_id, &test.buyer, &refund_reason);
     assert!(result.is_err());
     assert_eq!(result.unwrap_err(), Ok(ContractError::OperationNotAllowed));
 }
@@ -600,18 +638,24 @@ fn test_invalid_refund_request_on_cancelled_contract() {
 fn test_unauthorized_actions_protection() {
     let (test, contract_id) = RefundTest::setup_with_funded_contract();
     let unauthorized = Address::generate(&test.env);
-    
+
     // Test various unauthorized access attempts
-    let result = test.contract.try_mark_delivered(&contract_id, &unauthorized);
+    let result = test
+        .contract
+        .try_mark_delivered(&contract_id, &unauthorized);
     assert!(result.is_err());
     assert_eq!(result.unwrap_err(), Ok(ContractError::SellerOnly));
-    
-    let result = test.contract.try_confirm_delivery(&contract_id, &unauthorized);
+
+    let result = test
+        .contract
+        .try_confirm_delivery(&contract_id, &unauthorized);
     assert!(result.is_err());
     assert_eq!(result.unwrap_err(), Ok(ContractError::BuyerOnly));
-    
+
     let refund_reason = String::from_str(&test.env, "Unauthorized refund");
-    let result = test.contract.try_request_refund(&contract_id, &unauthorized, &refund_reason);
+    let result = test
+        .contract
+        .try_request_refund(&contract_id, &unauthorized, &refund_reason);
     assert!(result.is_err());
     assert_eq!(result.unwrap_err(), Ok(ContractError::ParticipantOnly));
 }
@@ -619,18 +663,18 @@ fn test_unauthorized_actions_protection() {
 #[test]
 fn test_get_user_contracts_pagination() {
     let test = RefundTest::setup();
-    
+
     // Create multiple contracts
     let mut contract_ids = std::vec![];
     for _ in 0..5 {
         let contract_id = test.create_refund_contract();
         contract_ids.push(contract_id);
     }
-    
+
     // Test pagination
     let first_page = test.contract.get_user_contracts(&test.buyer, &0, &3);
     assert_eq!(first_page.len(), 3);
-    
+
     let second_page = test.contract.get_user_contracts(&test.buyer, &3, &3);
     assert_eq!(second_page.len(), 2);
 }
@@ -638,10 +682,10 @@ fn test_get_user_contracts_pagination() {
 #[test]
 fn test_fund_contract_insufficient_balance() {
     let test = RefundTest::setup();
-    
+
     // Create buyer with insufficient balance
     let poor_buyer = Address::generate(&test.env);
-    
+
     let contract_id = test.contract.create_refund_contract(
         &poor_buyer,
         &test.seller,
@@ -651,7 +695,7 @@ fn test_fund_contract_insufficient_balance() {
         &DELIVERY_DEADLINE,
         &test.refund_conditions,
     );
-    
+
     // This should fail due to insufficient balance
     let result = test.contract.try_fund_contract(&contract_id, &poor_buyer);
     assert!(result.is_err());

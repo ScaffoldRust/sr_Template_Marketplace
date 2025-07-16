@@ -1,4 +1,4 @@
-use soroban_sdk::{contracttype, Address, Env, String};
+use soroban_sdk::{Address, Env, String, contracttype};
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -127,7 +127,13 @@ pub fn emit_refund_requested(env: &Env, contract_id: u64, requester: Address, re
     env.events().publish(("refund_requested",), event);
 }
 
-pub fn emit_refund_processed(env: &Env, contract_id: u64, recipient: Address, amount: u128, automatic: bool) {
+pub fn emit_refund_processed(
+    env: &Env,
+    contract_id: u64,
+    recipient: Address,
+    amount: u128,
+    automatic: bool,
+) {
     let event = RefundProcessedEvent {
         contract_id,
         recipient,
@@ -137,7 +143,13 @@ pub fn emit_refund_processed(env: &Env, contract_id: u64, recipient: Address, am
     env.events().publish(("refund_processed",), event);
 }
 
-pub fn emit_refund_dispute_resolved(env: &Env, contract_id: u64, admin: Address, approved: bool, amount: u128) {
+pub fn emit_refund_dispute_resolved(
+    env: &Env,
+    contract_id: u64,
+    admin: Address,
+    approved: bool,
+    amount: u128,
+) {
     let event = RefundDisputeResolvedEvent {
         contract_id,
         admin,
@@ -147,7 +159,12 @@ pub fn emit_refund_dispute_resolved(env: &Env, contract_id: u64, admin: Address,
     env.events().publish(("refund_dispute_resolved",), event);
 }
 
-pub fn emit_contract_cancelled(env: &Env, contract_id: u64, canceller: Address, refunded_amount: u128) {
+pub fn emit_contract_cancelled(
+    env: &Env,
+    contract_id: u64,
+    canceller: Address,
+    refunded_amount: u128,
+) {
     let event = ContractCancelledEvent {
         contract_id,
         canceller,

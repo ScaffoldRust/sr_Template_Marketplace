@@ -1,4 +1,4 @@
-use crate::storage_types::{Transaction, CancellationStatus};
+use crate::storage_types::{CancellationStatus, Transaction};
 use soroban_sdk::{symbol_short, Env};
 
 pub struct Events {
@@ -19,10 +19,9 @@ impl Events {
             transaction.buyer.clone(),
             transaction.seller.clone(),
         );
-        self.env.events().publish(
-            topics, 
-            (transaction.token.clone(), transaction.amount)
-        );
+        self.env
+            .events()
+            .publish(topics, (transaction.token.clone(), transaction.amount));
     }
 
     // Emit an event when a cancellation is proposed
@@ -33,14 +32,10 @@ impl Events {
             _ => panic!("Invalid cancellation status for proposal event"),
         };
 
-        let topics = (
-            symbol_short!("can_prop"),
-            transaction.id,
-            proposer,
-        );
+        let topics = (symbol_short!("can_prop"), transaction.id, proposer);
         self.env.events().publish(
-            topics, 
-            (transaction.proposal_timestamp, transaction.response_window)
+            topics,
+            (transaction.proposal_timestamp, transaction.response_window),
         );
     }
 
@@ -52,10 +47,7 @@ impl Events {
             transaction.buyer.clone(),
             transaction.seller.clone(),
         );
-        self.env.events().publish(
-            topics, 
-            transaction.amount
-        );
+        self.env.events().publish(topics, transaction.amount);
     }
 
     // Emit an event when a cancellation proposal expires
@@ -66,9 +58,6 @@ impl Events {
             transaction.buyer.clone(),
             transaction.seller.clone(),
         );
-        self.env.events().publish(
-            topics, 
-            transaction.status
-        );
+        self.env.events().publish(topics, transaction.status);
     }
-} 
+}

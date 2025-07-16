@@ -1,4 +1,4 @@
-use soroban_sdk::{contracttype, symbol_short, Address, Env, String, Symbol, Vec};
+use soroban_sdk::{Address, Env, String, Symbol, Vec, contracttype, symbol_short};
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -50,7 +50,11 @@ const CONTRACT_COUNTER: Symbol = symbol_short!("CTR_CNT");
 
 // Contract ID generation
 pub fn get_next_contract_id(env: &Env) -> u64 {
-    let current = env.storage().instance().get(&CONTRACT_COUNTER).unwrap_or(0u64);
+    let current = env
+        .storage()
+        .instance()
+        .get(&CONTRACT_COUNTER)
+        .unwrap_or(0u64);
     let next = current + 1;
     env.storage().instance().set(&CONTRACT_COUNTER, &next);
     next
@@ -70,7 +74,10 @@ pub fn set_contract(env: &Env, contract: &RefundContract) {
 // User contracts storage functions
 pub fn get_user_contracts(env: &Env, user: &Address) -> Vec<u64> {
     let key = StorageKey::UserContracts(user.clone());
-    env.storage().persistent().get(&key).unwrap_or(Vec::new(env))
+    env.storage()
+        .persistent()
+        .get(&key)
+        .unwrap_or(Vec::new(env))
 }
 
 pub fn add_user_contract(env: &Env, user: &Address, contract_id: u64) {
